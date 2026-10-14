@@ -496,7 +496,7 @@ void main() {
                     }               
                 }
                 else if (fsize > 0 ) {
-                    printf_("'%s' is not directory bastars!!!\n",file_name);
+                    printf_("'%s' is not directory bastard!!!\n",file_name);
                 }
                 else if (!strcmp_(file_name, "..")) {
                     subdir_entry = (struct Root_Entry *)ROOT_DIR_ADDR;
