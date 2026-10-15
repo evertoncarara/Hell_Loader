@@ -538,8 +538,19 @@ void main() {
             case LOAD:
                 n = get_token(cmd_line, n, file_name);
                 fat_standard(file_name, fat_name);
+                
+                if (strlen_(file_name) == 0) {
+                    puts_("Sintax: load <file> <address>\n");
+                    break;
+                }
+                
                 n = get_token(cmd_line, n, token);
                 addr = atoi_(token);
+                
+                if (strlen_(token) == 0) {
+                    puts_("Sintax: load <file> <address>\n");
+                    break;
+                }
                 
                 if ( (init_cluster = find_file(subdir_entry, bpb->root_entry_count, fat_name, &fsize)) ) {                               
                     if (load_file(fat, init_cluster, addr, bpb, TEMP_LOAD_ADDR) == 0) {
@@ -553,12 +564,24 @@ void main() {
             
             case RUN:
                 n = get_token(cmd_line, n, token);
+                
+                if (strlen_(token) == 0) {
+                    puts_("Sintax: run <address>\n");
+                    break;
+                }
+                
                 addr = atoi_(token);        
                 run(addr);
             break;
             
             case DUMP:
                 n = get_token(cmd_line, n, token);
+                
+                if (strlen_(token) == 0) {
+                    puts_("Sintax: dump <address>\n");
+                    break;
+                }
+                
                 addr = atoi_(token);        
                 dump(addr);
             break;
@@ -590,11 +613,26 @@ void main() {
                 n = get_token(cmd_line, n, token);
                 hour = atoi_(token);
                 
+                if (strlen_(token) == 0) {
+                    puts_("Sintax: stime <hour> <minute> <second>\n");
+                    break;
+                }
+                
                 n = get_token(cmd_line, n, token);
                 minute = atoi_(token);
                 
+                if (strlen_(token) == 0) {
+                    puts_("Sintax: stime <hour> <minute> <second>\n");
+                    break;
+                }
+                
                 n = get_token(cmd_line, n, token);
                 second = atoi_(token);
+                
+                if (strlen_(token) == 0) {
+                    puts_("Sintax: stime <hour> <minute> <second>\n");
+                    break;
+                }
                 
                 set_time(hour, minute, second);
                 time();                
@@ -607,8 +645,19 @@ void main() {
                 n = get_token(cmd_line, n, token);
                 byte = atoi_(token);
                 
+                if (strlen_(token) == 0) {
+                    puts_("Sintax: mwrite <data> <address>\n");
+                    break;
+                }
+                
                 n = get_token(cmd_line, n, token);
                 addr = atoi_(token);
+                
+                if (strlen_(token) == 0) {
+                    puts_("Sintax: mwrite <data> <address>\n");
+                    break;
+                }
+                
                 ptr = (uint8_t *)addr;
                 *ptr = byte;                 
                 

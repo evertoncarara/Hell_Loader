@@ -229,7 +229,7 @@ int atoi_(char *str) {
             digit = (str[i] - 'A' + 10);
         else {
             //printf_("ERROR atoi_: invalid digit %c\n",str[i]);
-            return 0;
+            return -1;
         }
 
         res = res * base + digit;
