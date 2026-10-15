@@ -14,11 +14,15 @@ void pwd_init() {
 }
 
 void pwd_push(char *str) {
-    strcpy_(stack.array[(stack.top)++], str);
+    if (stack.top < MAX - 2)
+        strcpy_(stack.array[stack.top++], str);
 }
 
 char *pwd_pop() {      
-    return stack.array[--(stack.top)];
+    if (stack.top > 0)
+        return stack.array[--stack.top];
+    else
+        return 0;
 }
 
 void pwd_print() {

@@ -1,5 +1,7 @@
+#define MORE_STACK_SIZE 1000
+
 struct MoreStack {
-    char *array[1000];
+    char *array[MORE_STACK_SIZE];
     int top;
 };
 
@@ -10,11 +12,15 @@ void more_init() {
 }
 
 void more_push(char *ptr) {
-    more_stack.array[more_stack.top++] = ptr;
+    if (more_stack.top < MORE_STACK_SIZE - 2)
+        more_stack.array[more_stack.top++] = ptr;    
 }
 
 char *more_pop() {      
-    return more_stack.array[--more_stack.top];
+    if (more_stack.top > 0)
+        return more_stack.array[--more_stack.top];
+    else
+        return 0;
 }
 
 int more_top() { 
