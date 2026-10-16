@@ -461,6 +461,42 @@ void mem_write(char *cmd_line) {
 
 }
 
+
+void stime(char *cmd_line) {
+                
+    uint8_t hour, minute, second;
+    uint8_t n = 0;
+    char token[5];
+    
+    n = get_token(cmd_line, n, token);
+    hour = atoi_(token);
+    
+    if (strlen_(token) == 0) {
+        puts_("Sintax: stime <hour> <minute> <second>\n");
+        return;
+    }
+    
+    n = get_token(cmd_line, n, token);
+    minute = atoi_(token);
+    
+    if (strlen_(token) == 0) {
+        puts_("Sintax: stime <hour> <minute> <second>\n");
+        return;
+    }
+    
+    n = get_token(cmd_line, n, token);
+    second = atoi_(token);
+    
+    if (strlen_(token) == 0) {
+        puts_("Sintax: stime <hour> <minute> <second>\n");
+        return;
+    }
+    
+    set_time(hour, minute, second);
+    time(); 
+}
+
+
 void main() {
     
     // Assume bootstap is STILL loaded
@@ -651,38 +687,11 @@ void main() {
             break;
             
             case SET_TIME:
-                uint8_t hour, minute, second;
-                
-                n = get_token(cmd_line, n, token);
-                hour = atoi_(token);
-                
-                if (strlen_(token) == 0) {
-                    puts_("Sintax: stime <hour> <minute> <second>\n");
-                    break;
-                }
-                
-                n = get_token(cmd_line, n, token);
-                minute = atoi_(token);
-                
-                if (strlen_(token) == 0) {
-                    puts_("Sintax: stime <hour> <minute> <second>\n");
-                    break;
-                }
-                
-                n = get_token(cmd_line, n, token);
-                second = atoi_(token);
-                
-                if (strlen_(token) == 0) {
-                    puts_("Sintax: stime <hour> <minute> <second>\n");
-                    break;
-                }
-                
-                set_time(hour, minute, second);
-                time();                
+                stime(&cmd_line[n]); // n: skips command 'stime'              
             break;
             
             case MEM_WRITE:                
-                mem_write(&cmd_line[n]);// n: skip the command 'mwrite'
+                mem_write(&cmd_line[n]);// n: skips the command 'mwrite'
             break;
             
             // Then test for executables
