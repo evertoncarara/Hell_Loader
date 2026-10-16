@@ -97,7 +97,8 @@ void prompt(char *subdir_entry) {
     
     static unsigned int count = 0;
     
-    printf_("%d:\\%s> ",count++, subdir_entry);
+    //printf_("%d:\\%s> ",count++, subdir_entry);
+    printf_("%d:%s> ",count++, subdir_entry);
     prompt_cursor();
 }
 
@@ -428,7 +429,7 @@ void main() {
     // Assume bootstap is STILL loaded
     struct BPB *bpb = (struct BPB *)0x7C00; 
              
-    // Assume FAT12 and root directory are STILL loaded (they are stored successive)
+    // Assume FAT12 and root directory are STILL loaded after boot (they are stored successive)
     uint8_t *fat = (void *)FAT_ADDR; // Load from bootstap
     struct Root_Entry *root_entry = (struct Root_Entry *)ROOT_DIR_ADDR; // Defined in bootloader.asm
     
@@ -458,10 +459,15 @@ void main() {
     
     // Initialize sub-directory names stack
     pwd_init();
+    
+    // Initialize command history buffer
     doskey_init();
     
+    strcpy_(current_dir, "root");    
     
     prompt(current_dir);  
+    
+    // Command line interface
     while(1) {
         
         keyboard_read(cmd_line, sizeof(cmd_line));
@@ -500,7 +506,7 @@ void main() {
                 }
                 else if (!strcmp_(file_name, "..")) {
                     subdir_entry = (struct Root_Entry *)ROOT_DIR_ADDR;
-                    if (current_dir[0] != '\0') // current_dir is not root ?
+                    if (strcmp_(current_dir, "root")) // current_dir is not root ?
                         strcpy_(current_dir, pwd_pop());
                 }
                 else
@@ -592,7 +598,7 @@ void main() {
             
             case PWD:
                 pwd_print();
-                printf_("%s/\n",current_dir);
+                printf_("%s>\n",current_dir);
             break;
             
             case HISTORY:
