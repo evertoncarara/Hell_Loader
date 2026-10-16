@@ -424,6 +424,43 @@ void dump(uint32_t addr) {
     puts_("\n");    
 }
 
+
+void mem_write(char *cmd_line) {
+
+    uint8_t bytes[20], *ptr;
+    uint16_t n = 0;
+    char token[20];
+    uint8_t i = 0;
+   
+    n = get_token(cmd_line, n, token);
+    
+    if (strlen_(token) == 0) {
+        puts_("Sintax: mwrite <address> <bytes sequence>\n");
+        return;
+    }
+    
+    ptr = (uint8_t *)atoi_(token);
+    
+    do {
+        n = get_token(cmd_line, n, token);        
+        
+        if (strlen_(token) == 0)
+            break;
+        
+        bytes[i++] = atoi_(token);        
+    } while(i < sizeof(bytes));
+    
+    if(i > 0)
+        for(uint8_t j = 0; j < i; j++, ptr++) {
+            *ptr = bytes[j];                     
+            printf_("MEM[%X] = %X\n", (uint32_t)ptr, *ptr);
+        }
+    else
+        puts_("Sintax: mwrite <address> <bytes sequence>\n");    
+    
+
+}
+
 void main() {
     
     // Assume bootstap is STILL loaded
@@ -644,30 +681,8 @@ void main() {
                 time();                
             break;
             
-            case MEM_WRITE:
-                uint32_t addr;                
-                uint8_t byte, *ptr;
-                
-                n = get_token(cmd_line, n, token);
-                byte = atoi_(token);
-                
-                if (strlen_(token) == 0) {
-                    puts_("Sintax: mwrite <data> <address>\n");
-                    break;
-                }
-                
-                n = get_token(cmd_line, n, token);
-                addr = atoi_(token);
-                
-                if (strlen_(token) == 0) {
-                    puts_("Sintax: mwrite <data> <address>\n");
-                    break;
-                }
-                
-                ptr = (uint8_t *)addr;
-                *ptr = byte;                 
-                
-                printf_("MEM[%X] = %X\n", addr, *ptr);
+            case MEM_WRITE:                
+                mem_write(&cmd_line[n]);// n: skip the command 'mwrite'
             break;
             
             // Then test for executables
