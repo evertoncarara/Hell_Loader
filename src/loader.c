@@ -536,8 +536,7 @@ void main() {
     // Initialize command history buffer
     doskey_init();
     
-    strcpy_(current_dir, "root");    
-    
+    strcpy_(current_dir, "root");   
     prompt(current_dir);  
     
     // Command line interface
@@ -546,9 +545,7 @@ void main() {
         keyboard_read(cmd_line, sizeof(cmd_line));
 
         n = 0;
-        token[0] = '\0';
-        n = get_token(cmd_line, n, token);
-        
+        n = get_token(cmd_line, n, token);        
             
         // Commands first
         switch (get_command(token)) {
@@ -579,7 +576,7 @@ void main() {
                 }
                 else if (!strcmp_(file_name, "..")) {
                     subdir_entry = (struct Root_Entry *)ROOT_DIR_ADDR;
-                    if (strcmp_(current_dir, "root")) // current_dir is not root ?
+                    if (pwd_top() > 0) // current_dir is not root ?
                         strcpy_(current_dir, pwd_pop());
                 }
                 else

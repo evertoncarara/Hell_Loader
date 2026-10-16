@@ -25,6 +25,10 @@ char *pwd_pop() {
         return 0;
 }
 
+int pwd_top() { 
+    return pwd_stack.top;
+}
+
 void pwd_print() {
     
     for (int8_t i = 0 ; i < pwd_stack.top; i++)
