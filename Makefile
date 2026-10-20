@@ -10,6 +10,7 @@ PRG_DIR=progs
 # -fno-zero-initialized-in-bss: Ensures that variables initialized to zero are allocated into .bss
 # -ffunction-sections flag tells the GCC compiler to place each function into its own unique code section instead of combining them all into a single monolithic .text section
 # --param=min-pagesize=0: Tell GCC that memory at address 0 is valid (avoid gcc 12 bug)
+# --32: assemble the source file for the 32-bit Intel i386 architecture
 CFLAGS = -c -ffreestanding -masm=intel -fno-zero-initialized-in-bss --param=min-pagesize=0 -Wall -Wextra  -I./include #-Wpedantic
 
 # -m elf_i386: compatibility with gcc -m16 output format
