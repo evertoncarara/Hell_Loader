@@ -61,10 +61,14 @@ int8_t load_linux(uint8_t *fat, struct Root_Entry *root_entry, struct BPB *bpb, 
     uint16_t init_cluster, clusters2sectors;
     uint32_t fsize;
     uint8_t *load_ptr;
+    struct Root_Entry *file_entry;
 
     struct setup_header *kernel_header;
     
-    if ( (init_cluster = find_file(root_entry, bpb->root_entry_count, linux_img, &fsize)) ) {                               
+    
+    file_entry = find_file(root_entry, bpb->root_entry_count, linux_img);
+    init_cluster = file_entry->current_cluster_low;
+    if (init_cluster > 0) {                               
 
         // Read first cluster just to get the setup_sects
         load_clusters(fat, init_cluster, 1, RUN_LINUX_ADDR, bpb);
@@ -112,8 +116,11 @@ int8_t load_linux(uint8_t *fat, struct Root_Entry *root_entry, struct BPB *bpb, 
         return -1;    
     }
     
-
-    if ( (init_cluster = find_file(root_entry, bpb->root_entry_count, ramdiskfs, &fsize)) ) {                                           
+    file_entry = find_file(root_entry, bpb->root_entry_count, ramdiskfs);
+    init_cluster = file_entry->current_cluster_low;
+    fsize = file_entry->size;
+    
+    if (init_cluster > 0) {                                           
         
         kernel_header->ramdisk_size = fsize;
        

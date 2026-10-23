@@ -10,15 +10,17 @@ void run_dos(uint8_t media_type, uint8_t drive_number, uint16_t first_data_secto
 int8_t dos(struct Root_Entry *root_entry, struct BPB *bpb) {
 
     uint16_t init_cluster;
-    uint32_t fsize;
     uint32_t lba;
     uint16_t lba_high, lba_low;
     uint16_t segment, offset;
     uint32_t first_data_sector = bpb->hidden_sector_count + bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat) + (bpb->root_entry_count * 32) / bpb->bytes_per_sector;    
-
+    struct Root_Entry *file_entry;
 
     // Search for io.sys and load the threee first sectors    
-    if ( (init_cluster = find_file(root_entry, bpb->root_entry_count, "IO      SYS", &fsize)) ) {                               
+    file_entry = find_file(root_entry, bpb->root_entry_count, "IO      SYS");
+    init_cluster = file_entry->current_cluster_low;
+    
+    if (init_cluster > 0) {                               
               
         // IO.SYS always loaded at 0x700                  
         lba = first_data_sector + (init_cluster - 2) * bpb->sectors_per_cluster; // -2: First two entries in FAT are reserved

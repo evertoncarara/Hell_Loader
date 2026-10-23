@@ -1,0 +1,7 @@
+- refatorar onde tem chamada para find_file. Testar retorno antes de usar, pois pode nao ter achado o file
+- refatorar linux.h e dos.h nas alterações relativas ao find_file
+
+- adicionar um entrada no diretório para o nome do arquivo
+- memory_map.h: para poder remover das funções parametros relativos a endereços de memória q são constantes (fat, bpb, ...)
+
+

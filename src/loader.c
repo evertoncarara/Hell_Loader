@@ -499,7 +499,7 @@ void stime(char *cmd_line) {
 }
 
 
-int get_free_clusters(uint8_t *fat, struct BPB *bpb, uint32_t count, uint16_t *clusters) {
+int get_free_clusters_test(uint8_t *fat, struct BPB *bpb, uint32_t count, uint16_t *clusters) {
 
     uint16_t *fat16 = (uint16_t *)fat; 
     uint32_t entries = (bpb->sectors_per_fat * bpb->bytes_per_sector) / 2; // Each FAT16 entry has 2 bytes
@@ -528,7 +528,7 @@ void main() {
     // Assume FAT12 and root directory are STILL loaded after boot (they are stored successive)
     uint8_t *fat = (uint8_t *)FAT_ADDR; // Load from bootstap
     struct Root_Entry *current_dir_entry = (struct Root_Entry *)ROOT_DIR_ADDR; // Defined in bootloader.asm
-    
+    struct Root_Entry *file_entry;
     
     clear_screen();
     puts_("\t\t\t\t\t*** Wellcome to hell loader!!! ***\n\n");
@@ -557,7 +557,7 @@ void main() {
      
 
     uint16_t clusters[100];
-    get_free_clusters(fat, bpb, 5, clusters);    
+    get_free_clusters_test(fat, bpb, 5, clusters);    
     write_file(fat, "TEST.TXT", current_dir_entry, clusters, 0x80000, 1, bpb, TEMP_LOAD_ADDR);
     
     
@@ -592,7 +592,12 @@ void main() {
                 if (!strcmp_(file_name, "."))
                     break;    
             
-                init_cluster = find_file(current_dir_entry, bpb->root_entry_count, fat_name, &fsize);
+                file_entry = find_file(current_dir_entry, bpb->root_entry_count, fat_name);
+                
+                printf_("file_entry: %X\n", file_entry);
+                
+                init_cluster = file_entry->current_cluster_low;
+                fsize = file_entry->size;
                 // init_cluster == 0: file not found or refers to root dir
                 
                 uint8_t is_root_dir = (!strcmp_(file_name, "..") && init_cluster == 0 && fsize == 0) ? 1 : 0;
@@ -632,7 +637,11 @@ void main() {
                 get_token(cmd_line, n, file_name);
                 fat_standard(file_name, fat_name);
                                                
-                if ( (init_cluster = find_file(current_dir_entry, bpb->root_entry_count, fat_name, &fsize)) ) {                               
+                file_entry = find_file(current_dir_entry, bpb->root_entry_count, fat_name);
+                init_cluster = file_entry->current_cluster_low;
+                fsize = file_entry->size;
+                
+                if (init_cluster > 0) {                               
                     load_file(fat, init_cluster, HIGH_MEMORY, bpb, TEMP_LOAD_ADDR);
                     more(HIGH_MEMORY, fsize);
                 }
@@ -665,7 +674,10 @@ void main() {
                     break;
                 }
                 
-                if ( (init_cluster = find_file(current_dir_entry, bpb->root_entry_count, fat_name, &fsize)) ) {                               
+                file_entry = find_file(current_dir_entry, bpb->root_entry_count, fat_name);
+                init_cluster = file_entry->current_cluster_low;
+                fsize = file_entry->size;
+                if (init_cluster > 0) {                               
                     if (load_file(fat, init_cluster, addr, bpb, TEMP_LOAD_ADDR) == 0) {
                         printf_("%s: loaded %d bytes at [%X]\n",file_name, fsize, TEMP_LOAD_ADDR);                
                         printf_("%s: copied %d bytes to [%X]\n",file_name, fsize, addr);
@@ -733,7 +745,10 @@ void main() {
             default:
                 fat_standard(cmd_line, fat_name);            
                 
-                if ( (init_cluster = find_file(current_dir_entry, bpb->root_entry_count, fat_name, &fsize)) ) {                               
+                file_entry = find_file(current_dir_entry, bpb->root_entry_count, fat_name);
+                init_cluster = file_entry->current_cluster_low;
+                fsize = file_entry->size;
+                if (init_cluster > 0) {                               
                     
                     if (fsize > 0 && load_file(fat, init_cluster, HIGH_MEMORY, bpb, TEMP_LOAD_ADDR) == 0) {                    
                         printf_("%s: loaded %d bytes at [%X]\n",cmd_line, fsize, TEMP_LOAD_ADDR);                
