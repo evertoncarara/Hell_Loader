@@ -16,7 +16,6 @@
 // to some memory area achievable in real mode, due to limitations of bios_extended_read_drive 
 // and then copied to high memory area
 #define HIGH_MEMORY         0x1000000
-//#define CURRENT_DIR_ADDR    0x90000     // 9000:0000 (segment 9)
 #define TEMP_LOAD_ADDR      0x10000     // 1000:0000 (segment 1)
 
 
@@ -137,6 +136,9 @@ void more(uint32_t addr, uint32_t fsize) {
     char *ptr = (char *)addr;
     char key;
     int32_t print_lines = LINES;
+    
+    if (fsize == 0)
+        return;
     
     // Print one page
     more_init();
@@ -497,21 +499,6 @@ void stime(char *cmd_line) {
 }
 
 
-void free_clusters(uint8_t *fat, struct BPB *bpb) {
-
-    uint16_t *fat16 = (uint16_t *)fat; 
-    uint32_t count = 0;
-    uint32_t entries = (bpb->sectors_per_fat * bpb->bytes_per_sector) / 2; // Each FAT16 entry has 2 bytes
-
-    for(uint32_t i = 0; i < entries; i++)
-        if (fat16[i] == 0)
-            count++;
-            
-    printf_("free_clusters: %d\n", count);
-
-}
-
-
 int get_free_clusters(uint8_t *fat, struct BPB *bpb, uint32_t count, uint16_t *clusters) {
 
     uint16_t *fat16 = (uint16_t *)fat; 
@@ -528,9 +515,7 @@ int get_free_clusters(uint8_t *fat, struct BPB *bpb, uint32_t count, uint16_t *c
         printf_("get_free_clusters: only %d free clusters found. Required: %d\n", j,count);
         return -1;
     }
-    
-    
-            
+        
     return 0;
 }
 
@@ -569,14 +554,12 @@ void main() {
     
     
     
-    
-        
-    *((uint32_t *)(fat + 0x1F800 - 4)) = 0x12345678;
+     
+
     uint16_t clusters[100];
     get_free_clusters(fat, bpb, 5, clusters);    
     write_file(fat, "TEST.TXT", current_dir_entry, clusters, 0x80000, 1, bpb, TEMP_LOAD_ADDR);
     
-    //load_root_dir((uint8_t *)CURRENT_DIR_ADDR, bpb, TEMP_LOAD_ADDR);
     
     
     // Initialize sub-directory names stack
