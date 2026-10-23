@@ -105,8 +105,7 @@ void update_fat_disk(uint8_t *fat, struct BPB *bpb) {
 
 // Write back FAT on disk
 void update_dir_entry_disk(uint8_t *dir, struct BPB *bpb, uint32_t temp_load_area) {
-    
-   
+       
     uint16_t lba_high, lba_low;
     uint16_t segment, offset;    
     uint32_t lba;    
@@ -115,17 +114,35 @@ void update_dir_entry_disk(uint8_t *dir, struct BPB *bpb, uint32_t temp_load_are
     // BIOS cant access memory above 1MiB
     memcpy_((uint8_t *)temp_load_area, (uint8_t *)dir, bpb->root_entry_count * 32);
     
-    // Upadate FATs
-
-    
+    // Set the initial sector of root directory 
     lba = bpb->hidden_sector_count + bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat);     
-
-
         
-    // Writesectors
+    // Write sectors
     linear2segmented(temp_load_area, &segment, &offset);        
     lba_high = lba >> 16;
     lba_low = lba & 0x0000FFFF;
     bios_extended_write_drive(lba_high, lba_low, dir_sectors, segment, offset);    
+}
+
+
+// Write back FAT on disk
+void load_root_dir(uint8_t *dir, struct BPB *bpb, uint32_t temp_load_area) {
+       
+    uint16_t lba_high, lba_low;
+    uint16_t segment, offset;    
+    uint32_t lba;    
+    uint16_t dir_sectors = (bpb->root_entry_count * 32) / bpb->bytes_per_sector;
+            
+    // Set the initial sector of root directory   
+    lba = bpb->hidden_sector_count + bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat);     
+        
+    // Read sectors
+    linear2segmented(temp_load_area, &segment, &offset);        
+    lba_high = lba >> 16;
+    lba_low = lba & 0x0000FFFF;
+    bios_extended_read_drive(lba_high, lba_low, dir_sectors, segment, offset);
+    
+    // BIOS cant access memory above 1MiB
+    memcpy_(dir, (uint8_t *)temp_load_area, bpb->root_entry_count * 32);    
 }
 

@@ -16,7 +16,7 @@
 // to some memory area achievable in real mode, due to limitations of bios_extended_read_drive 
 // and then copied to high memory area
 #define HIGH_MEMORY         0x1000000
-#define CURRENT_DIR_ADDR    0x90000     // 9000:0000 (segment 9)
+//#define CURRENT_DIR_ADDR    0x90000     // 9000:0000 (segment 9)
 #define TEMP_LOAD_ADDR      0x10000     // 1000:0000 (segment 1)
 
 
@@ -93,12 +93,12 @@ void mem_report() {
 }
 
 
-void prompt(char *subdir_entry) {
+void prompt(char *current_dir_entry) {
     
     static unsigned int count = 0;
     
-    //printf_("%d:\\%s> ",count++, subdir_entry);
-    printf_("%d:%s> ",count++, subdir_entry);
+    //printf_("%d:\\%s> ",count++, current_dir_entry);
+    printf_("%d:%s> ",count++, current_dir_entry);
     prompt_cursor();
 }
 
@@ -542,7 +542,7 @@ void main() {
              
     // Assume FAT12 and root directory are STILL loaded after boot (they are stored successive)
     uint8_t *fat = (uint8_t *)FAT_ADDR; // Load from bootstap
-    struct Root_Entry *root_entry = (struct Root_Entry *)ROOT_DIR_ADDR; // Defined in bootloader.asm
+    struct Root_Entry *current_dir_entry = (struct Root_Entry *)ROOT_DIR_ADDR; // Defined in bootloader.asm
     
     
     clear_screen();
@@ -564,7 +564,6 @@ void main() {
     uint32_t addr;
     char file_name[20], fat_name[20];
     uint16_t n;
-    struct Root_Entry *subdir_entry = root_entry;
     char current_dir[20];
     current_dir[0] = '\0';
     
@@ -575,9 +574,9 @@ void main() {
     *((uint32_t *)(fat + 0x1F800 - 4)) = 0x12345678;
     uint16_t clusters[100];
     get_free_clusters(fat, bpb, 5, clusters);    
-    write_file(fat, "TEST.TXT", subdir_entry, clusters, 0x80000, 1, bpb, TEMP_LOAD_ADDR);
+    write_file(fat, "TEST.TXT", current_dir_entry, clusters, 0x80000, 1, bpb, TEMP_LOAD_ADDR);
     
-    
+    //load_root_dir((uint8_t *)CURRENT_DIR_ADDR, bpb, TEMP_LOAD_ADDR);
     
     
     // Initialize sub-directory names stack
@@ -600,18 +599,23 @@ void main() {
         // Commands first
         switch (get_command(token)) {
             case LS:
-                list_files(subdir_entry, bpb->root_entry_count);
+                list_files(current_dir_entry, bpb->root_entry_count);
             break;
             
             case CD:
                 get_token(cmd_line, n, file_name);
-                fat_standard(file_name, fat_name);   
-            
-                init_cluster = find_file(subdir_entry, bpb->root_entry_count, fat_name, &fsize);
+                fat_standard(file_name, fat_name);
                 
-                if (init_cluster && fsize == 0) {   // Directory size == 0
-                    load_file(fat, init_cluster, CURRENT_DIR_ADDR, bpb, TEMP_LOAD_ADDR);
-                    subdir_entry = (struct Root_Entry *)CURRENT_DIR_ADDR;
+                if (!strcmp_(file_name, "."))
+                    break;    
+            
+                init_cluster = find_file(current_dir_entry, bpb->root_entry_count, fat_name, &fsize);
+                // init_cluster == 0: file not found or refers to root dir
+                
+                uint8_t is_root_dir = (!strcmp_(file_name, "..") && init_cluster == 0 && fsize == 0) ? 1 : 0;
+                               
+                if (init_cluster && fsize == 0) { // Ordinary directory ? (directory fsize == 0)  
+                    load_file(fat, init_cluster, (uint32_t)current_dir_entry, bpb, TEMP_LOAD_ADDR);
                     
                     if (!strcmp_(file_name, "..")) {
                         strcpy_(current_dir, pwd_pop());
@@ -621,13 +625,13 @@ void main() {
                         strcpy_(current_dir, file_name);                
                     }               
                 }
-                else if (fsize > 0 ) {
-                    printf_("'%s' is not directory bastard!!!\n",file_name);
-                }
-                else if (!strcmp_(file_name, "..")) {
-                    subdir_entry = (struct Root_Entry *)ROOT_DIR_ADDR;
+                else if (is_root_dir) {
+                    load_root_dir((uint8_t *)current_dir_entry, bpb, TEMP_LOAD_ADDR);
                     if (pwd_top() > 0) // current_dir is not root ?
                         strcpy_(current_dir, pwd_pop());
+                }
+                else if (fsize > 0 ) {
+                    printf_("'%s' is not directory bastard!!!\n",file_name);
                 }
                 else
                     printf_("'%s' not found bastard!!!\n",file_name);
@@ -645,7 +649,7 @@ void main() {
                 get_token(cmd_line, n, file_name);
                 fat_standard(file_name, fat_name);
                                                
-                if ( (init_cluster = find_file(subdir_entry, bpb->root_entry_count, fat_name, &fsize)) ) {                               
+                if ( (init_cluster = find_file(current_dir_entry, bpb->root_entry_count, fat_name, &fsize)) ) {                               
                     load_file(fat, init_cluster, HIGH_MEMORY, bpb, TEMP_LOAD_ADDR);
                     more(HIGH_MEMORY, fsize);
                 }
@@ -658,7 +662,7 @@ void main() {
                 //n = get_token(cmd_line, n, ramdiskfs);
                 strcpy_(linux_img,"BZIMAGE IMG");
                 strcpy_(ramdiskfs,"INITRD  IMG");
-                load_linux(fat, subdir_entry, bpb, linux_img, ramdiskfs);
+                load_linux(fat, current_dir_entry, bpb, linux_img, ramdiskfs);
             break;
         
             case LOAD:
@@ -678,7 +682,7 @@ void main() {
                     break;
                 }
                 
-                if ( (init_cluster = find_file(subdir_entry, bpb->root_entry_count, fat_name, &fsize)) ) {                               
+                if ( (init_cluster = find_file(current_dir_entry, bpb->root_entry_count, fat_name, &fsize)) ) {                               
                     if (load_file(fat, init_cluster, addr, bpb, TEMP_LOAD_ADDR) == 0) {
                         printf_("%s: loaded %d bytes at [%X]\n",file_name, fsize, TEMP_LOAD_ADDR);                
                         printf_("%s: copied %d bytes to [%X]\n",file_name, fsize, addr);
@@ -713,7 +717,8 @@ void main() {
             break;
             
             case DOS:
-                dos(root_entry, bpb);
+                load_root_dir((uint8_t *)current_dir_entry, bpb, TEMP_LOAD_ADDR);
+                dos(current_dir_entry, bpb);
             break;
             
             case PWD:
@@ -745,7 +750,7 @@ void main() {
             default:
                 fat_standard(cmd_line, fat_name);            
                 
-                if ( (init_cluster = find_file(subdir_entry, bpb->root_entry_count, fat_name, &fsize)) ) {                               
+                if ( (init_cluster = find_file(current_dir_entry, bpb->root_entry_count, fat_name, &fsize)) ) {                               
                     
                     if (fsize > 0 && load_file(fat, init_cluster, HIGH_MEMORY, bpb, TEMP_LOAD_ADDR) == 0) {                    
                         printf_("%s: loaded %d bytes at [%X]\n",cmd_line, fsize, TEMP_LOAD_ADDR);                
