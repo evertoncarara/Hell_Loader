@@ -16,7 +16,7 @@ CFLAGS = -c -ffreestanding -masm=intel -fno-zero-initialized-in-bss --param=min-
 # -m elf_i386: compatibility with gcc -m16 output format
 LDFLAGS = -m elf_i386
 
-all: always bootstrap loader bootable_disk 
+all: always bootstrap loader tetris bootable_disk 
 
 
 

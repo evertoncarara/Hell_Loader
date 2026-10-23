@@ -40,6 +40,7 @@ uint16_t find_file(struct Root_Entry *root_entry, uint16_t count, char *name, ui
     return found;    
 }
 
+
 int load_file(uint8_t *fat, uint16_t init_cluster, uint32_t addr, struct BPB *bpb, uint32_t temp_load_area) {
 
     uint16_t current_cluster = init_cluster;
@@ -76,6 +77,44 @@ int load_file(uint8_t *fat, uint16_t init_cluster, uint32_t addr, struct BPB *bp
 }
 
 
+void write_file(uint8_t *fat, char *name, struct Root_Entry *dir, uint16_t *clusters, uint32_t addr, uint32_t count, struct BPB *bpb, uint32_t temp_load_area) {
+
+    uint16_t next_cluster;
+    uint32_t current_read_addr = addr;
+    uint32_t i;
+     
+    // Write the file cluster by cluster 
+    for (i = 0; i < count; i++) {            
+
+        // BIOS cant access memory above 1MiB
+        memcpy_((uint8_t *)temp_load_area, (uint8_t *)current_read_addr, bpb->sectors_per_cluster * bpb->bytes_per_sector);
+        current_read_addr += bpb->sectors_per_cluster * bpb->bytes_per_sector;        
+        
+        next_cluster = (i == count - 1) ? END_OF_CHAIN : i + 1;   
+        write_cluster(fat, clusters[i], next_cluster, temp_load_area, bpb);
+    }
+    
+    // Update FAT on disk
+    // BIOS cant access memory above 1MiB
+    memcpy_((uint8_t *)temp_load_area, (uint8_t *)fat, bpb->sectors_per_fat * bpb->bytes_per_sector);
+    update_fat_disk ((uint8_t *)temp_load_area, bpb);
+    
+    // Searches an available entry in current directory
+    struct Root_Entry *entry = dir;
+    for (i = 0; i < bpb->root_entry_count; i++, entry++) {
+        if (entry->name[0] == 0 || entry->name[0] == 0xE5)
+            break;
+    }
+    
+    printf_("free entry: %d\n", i);
+    fat_standard(name, entry->name);
+    entry->attributes = ARCHIVE;
+    //update_dir_entry_disk(dir, bpb, temp_load_area);
+
+    
+}
+
+
 void list_files(struct Root_Entry *root_entry, uint16_t count) {
     
     char str[20];
@@ -85,8 +124,7 @@ void list_files(struct Root_Entry *root_entry, uint16_t count) {
     uint8_t mon, day;
     uint16_t year;
     uint16_t entry;
-    uint32_t total_size = 0;
-       
+    uint32_t total_size = 0;       
        
     /*
     DIR_Name[0]: the value 0x00 indicates that the entry is not used and in addition, 

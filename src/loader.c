@@ -497,13 +497,51 @@ void stime(char *cmd_line) {
 }
 
 
+void free_clusters(uint8_t *fat, struct BPB *bpb) {
+
+    uint16_t *fat16 = (uint16_t *)fat; 
+    uint32_t count = 0;
+    uint32_t entries = (bpb->sectors_per_fat * bpb->bytes_per_sector) / 2; // Each FAT16 entry has 2 bytes
+
+    for(uint32_t i = 0; i < entries; i++)
+        if (fat16[i] == 0)
+            count++;
+            
+    printf_("free_clusters: %d\n", count);
+
+}
+
+
+int get_free_clusters(uint8_t *fat, struct BPB *bpb, uint32_t count, uint16_t *clusters) {
+
+    uint16_t *fat16 = (uint16_t *)fat; 
+    uint32_t entries = (bpb->sectors_per_fat * bpb->bytes_per_sector) / 2; // Each FAT16 entry has 2 bytes
+    uint32_t i, j;
+
+    for(i = 0, j = 0; i < entries && j < count; i++)
+        if (fat16[i] == 0) {
+            clusters[j++] = i;
+            printf_("free cluster: %d\n",i); 
+        }
+            
+    if (j < count) {
+        printf_("get_free_clusters: only %d free clusters found. Required: %d\n", j,count);
+        return -1;
+    }
+    
+    
+            
+    return 0;
+}
+
+
 void main() {
     
     // Assume bootstap is STILL loaded
     struct BPB *bpb = (struct BPB *)0x7C00; 
              
     // Assume FAT12 and root directory are STILL loaded after boot (they are stored successive)
-    uint8_t *fat = (void *)FAT_ADDR; // Load from bootstap
+    uint8_t *fat = (uint8_t *)FAT_ADDR; // Load from bootstap
     struct Root_Entry *root_entry = (struct Root_Entry *)ROOT_DIR_ADDR; // Defined in bootloader.asm
     
     
@@ -529,6 +567,18 @@ void main() {
     struct Root_Entry *subdir_entry = root_entry;
     char current_dir[20];
     current_dir[0] = '\0';
+    
+    
+    
+    
+        
+    *((uint32_t *)(fat + 0x1F800 - 4)) = 0x12345678;
+    uint16_t clusters[100];
+    get_free_clusters(fat, bpb, 5, clusters);    
+    write_file(fat, "TEST.TXT", subdir_entry, clusters, 0x80000, 1, bpb, TEMP_LOAD_ADDR);
+    
+    
+    
     
     // Initialize sub-directory names stack
     pwd_init();

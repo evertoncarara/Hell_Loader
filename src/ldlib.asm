@@ -9,6 +9,7 @@
 .intel_syntax noprefix
 .global entry
 .global bios_extended_read_drive
+.global bios_extended_write_drive
 .global wait_for_key
 .global kbhit
 .global get_key
@@ -367,6 +368,46 @@ get_ip_brd:
     pop ebp
     ret 
     
+    
+#    
+# Write to disk sectors
+#
+bios_extended_write_drive:
+.code32
+    push ebp
+    mov  ebp, esp
+    pusha                   # Save EAX, ECX, EDX, EBX, ESP, EBP, ESI, and EDI
+   
+    ENTER_REAL_MODE 
+   
+# Gets the ip (instruction pointer) to compute variables absolute address in runtime (relative addressing not supported)
+    call get_ip_bwd
+get_ip_bwd:
+    pop bx                  # bx has the ip address pointing to the get_ip label    
+    
+    lea si, [bx + (dap - get_ip_bwd)]         # ds:si points to the Disk Address Packet
+    mov ax, [ebp + 8]       # LBA sector high word
+    mov [si + 10], ax       # Write to dap.lba
+    mov ax, [ebp + 12]      # LBA sector low word
+    mov [si + 8], ax        # Write to dap.lba                       
+    mov ax, [ebp + 16]      # Number of sectors to read
+    mov [si + 2], ax        # Write to dap.sectors 
+    mov ax, [ebp + 20]      # Target segment
+    mov [si + 6], ax        # Write to dap.segment
+    mov ax, [ebp + 24]      # Buffer Address Pointer
+    mov [si + 4], ax        # Write to dap.offset
+
+    
+    mov ah, 0x43            # BIOS Extended Read Sectors
+    mov dl, 0x80            # Drive number (0x80 for first hard drive)
+    int 0x13                # Call BIOS disk services
+    
+    ENTER_PROTECTED_MODE
+    
+    popa                    # Restore EAX, ECX, EDX, EBX, ESP, EBP, ESI, and EDI
+    pop ebp
+    ret 
+        
 
 #    
 # Execute real mode kernel
