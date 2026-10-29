@@ -18,21 +18,20 @@ int8_t dos(struct Root_Entry *root_entry, struct BPB *bpb) {
 
     // Search for io.sys and load the threee first sectors    
     file_entry = find_file(root_entry, bpb->root_entry_count, "IO      SYS");
-    init_cluster = file_entry->current_cluster_low;
-    
-    if (init_cluster > 0) {                               
-              
-        // IO.SYS always loaded at 0x700                  
-        lba = first_data_sector + (init_cluster - 2) * bpb->sectors_per_cluster; // -2: First two entries in FAT are reserved
-        linear2segmented(0x700, &segment, &offset);
-        lba_high = lba >> 16;
-        lba_low = lba & 0x0000FFFF;
-        bios_extended_read_drive(lba_high, lba_low, 3, segment, offset);
-    }
-    else {
+    if (file_entry == 0) {
         printf_("ERROR: file 'io.sys' not found bastard!!!.\n");
-        return -1;    
+        return -1;
     }
+    
+    init_cluster = file_entry->current_cluster_low;
+              
+    // IO.SYS always loaded at 0x700                  
+    lba = first_data_sector + (init_cluster - 2) * bpb->sectors_per_cluster; // -2: First two entries in FAT are reserved
+    linear2segmented(0x700, &segment, &offset);
+    lba_high = lba >> 16;
+    lba_low = lba & 0x0000FFFF;
+    bios_extended_read_drive(lba_high, lba_low, 3, segment, offset);
+
 
 
 /*

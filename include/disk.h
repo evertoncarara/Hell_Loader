@@ -42,31 +42,25 @@ uint16_t load_clusters(uint8_t *fat, uint16_t init_cluster, uint16_t count, uint
 }
 
 
-// Write one cluster and set FAT with the next cluster
-void write_cluster(uint8_t *fat, uint16_t init_cluster, uint16_t next_cluster, uint32_t addr, struct BPB *bpb) {
+// Write one cluster on disk
+void write_cluster(uint16_t init_cluster, uint32_t addr, struct BPB *bpb) {
 
     uint16_t current_cluster = init_cluster;
     uint32_t lba;
     uint16_t lba_high, lba_low;
     uint16_t segment, offset;
     uint32_t first_data_sector = bpb->hidden_sector_count + bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat) + (bpb->root_entry_count * 32) / bpb->bytes_per_sector;    
-    uint16_t *fat16 = (uint16_t *)fat;
-                               
-        
+                                    
     lba = first_data_sector + (current_cluster - 2) * bpb->sectors_per_cluster; // -2: First two entries in FAT are reserved
     linear2segmented(addr, &segment, &offset);        
     lba_high = lba >> 16;
     lba_low = lba & 0x0000FFFF;
     bios_extended_write_drive(lba_high, lba_low, bpb->sectors_per_cluster, segment, offset);
-
-        
-    // Set next cluster on FAT
-    fat16[current_cluster] = next_cluster;        
 }
 
 
 // Write back FAT on disk
-void update_fat_disk(uint8_t *fat, struct BPB *bpb) {
+void update_fat_disk (uint8_t *fat, struct BPB *bpb, uint32_t temp_ram_area) {
     
     // When using BIOS INT 13h extended write functions (such as AH=43h), 
     // the maximum number of sectors that can be transferred in a single call is 127
@@ -79,12 +73,17 @@ void update_fat_disk(uint8_t *fat, struct BPB *bpb) {
     uint8_t rem_sectors = bpb->sectors_per_fat % max_write_sectors;
     uint8_t *fat_temp;
     
+    // BIOS cant access memory above 1MiB
+    memcpy_((uint8_t *)temp_ram_area, (uint8_t *)fat, bpb->sectors_per_fat * bpb->bytes_per_sector);
     
     // Upadate FATs
     for (uint8_t j = 0; j < bpb->fat_count; j++) {
     
         lba = bpb->hidden_sector_count + bpb->reserved_sectors + (j * bpb->sectors_per_fat);     
-        fat_temp = fat;
+        fat_temp = (uint8_t *)temp_ram_area;
+        
+        printf_("lba: %X\n",lba);
+        printf_("fat_temp: %X\n",fat_temp);
         
         // Write chuncks of max_write_sectors
         for (uint8_t i = 0; i < count; i++, lba += max_write_sectors, fat_temp += max_write_sectors * bpb->bytes_per_sector) {
@@ -103,19 +102,25 @@ void update_fat_disk(uint8_t *fat, struct BPB *bpb) {
 }
 
 
-// Write back FAT on disk
-void update_dir_entry_disk(uint8_t *dir, struct BPB *bpb, uint32_t temp_ram_area) {
+// Write back directory on disk
+void update_dir_entry_disk(uint8_t *dir, struct BPB *bpb, uint16_t init_cluster, uint32_t temp_ram_area) {
        
     uint16_t lba_high, lba_low;
     uint16_t segment, offset;    
     uint32_t lba;    
     uint16_t dir_sectors = (bpb->root_entry_count * 32) / bpb->bytes_per_sector;
+    uint32_t first_data_sector;
+    
+    // Set the initial directory sector
+    if (pwd_top() == 0) // root dir
+        lba = bpb->hidden_sector_count + bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat);
+    else {
+        first_data_sector = bpb->hidden_sector_count + bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat) + (bpb->root_entry_count * 32) / bpb->bytes_per_sector;    
+        lba = first_data_sector + (init_cluster - 2) * bpb->sectors_per_cluster; // -2: First two entries in FAT are reserved
+    }
     
     // BIOS cant access memory above 1MiB
     memcpy_((uint8_t *)temp_ram_area, (uint8_t *)dir, bpb->root_entry_count * 32);
-    
-    // Set the initial sector of root directory 
-    lba = bpb->hidden_sector_count + bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat);     
         
     // Write sectors
     linear2segmented(temp_ram_area, &segment, &offset);        
@@ -125,7 +130,8 @@ void update_dir_entry_disk(uint8_t *dir, struct BPB *bpb, uint32_t temp_ram_area
 }
 
 
-// Write back FAT on disk
+
+// Loads root directory from disk to RAM
 void load_root_dir(uint8_t *dir, struct BPB *bpb, uint32_t temp_ram_area) {
        
     uint16_t lba_high, lba_low;
@@ -135,7 +141,7 @@ void load_root_dir(uint8_t *dir, struct BPB *bpb, uint32_t temp_ram_area) {
             
     // Set the initial sector of root directory   
     lba = bpb->hidden_sector_count + bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat);     
-        
+            
     // Read sectors
     linear2segmented(temp_ram_area, &segment, &offset);        
     lba_high = lba >> 16;

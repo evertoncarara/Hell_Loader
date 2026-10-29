@@ -16,7 +16,7 @@
 // to some memory area achievable in real mode, due to limitations of bios_extended_read_drive 
 // and then copied to high memory area
 #define HIGH_MEMORY         0x1000000
-#define TEMP_LOAD_ADDR      0x10000     // 1000:0000 (segment 1)
+#define TEMP_LOAD_ADDR      0x20000     // 1000:0000 (segment 1)
 
 
 // Commands
@@ -36,7 +36,8 @@
 #define MEM         13
 #define GET_TIME    14
 #define SET_TIME    15
-#define MEM_WRITE   16        
+#define MEM_WRITE   16
+#define COPY        17        
 
 // https://wiki.osdev.org/Detecting_Memory_(x86)#BIOS_Function:_INT_0x15,_EAX_=_0xE820
 struct SMAP_entry_t {
@@ -121,6 +122,9 @@ uint16_t get_token(char *str, uint16_t n, char *token) {
 
     return n;
 }
+
+
+
 
 
 void run(uint32_t addr) {
@@ -222,6 +226,7 @@ uint8_t get_command(char *cmd) {
     if (!strcmp_(cmd, "time"))      return GET_TIME;
     if (!strcmp_(cmd, "stime"))     return SET_TIME;
     if (!strcmp_(cmd, "mwrite"))    return MEM_WRITE;
+    if (!strcmp_(cmd, "cp") || !strcmp_(cmd, "copy"))    return COPY;
     
     return UNKNOWN;    
 }
@@ -499,26 +504,6 @@ void stime(char *cmd_line) {
 }
 
 
-int get_free_clusters_test(uint8_t *fat, struct BPB *bpb, uint32_t count, uint16_t *clusters) {
-
-    uint16_t *fat16 = (uint16_t *)fat; 
-    uint32_t entries = (bpb->sectors_per_fat * bpb->bytes_per_sector) / 2; // Each FAT16 entry has 2 bytes
-    uint32_t i, j;
-
-    for(i = 0, j = 0; i < entries && j < count; i++)
-        if (fat16[i] == 0) {
-            clusters[j++] = i;
-            printf_("free cluster: %d\n",i); 
-        }
-            
-    if (j < count) {
-        printf_("get_free_clusters: only %d free clusters found. Required: %d\n", j,count);
-        return -1;
-    }
-        
-    return 0;
-}
-
 
 void main() {
     
@@ -540,8 +525,7 @@ void main() {
 
 
     
-    uint16_t init_cluster;
-    uint32_t fsize;
+    uint16_t init_cluster, current_dir_cluster;
     void (*func_ptr)(void) = (void (*)(void))TEMP_LOAD_ADDR;
     char cmd_line[100];
     char linux_img[20], ramdiskfs[20];
@@ -552,15 +536,21 @@ void main() {
     char current_dir[20];
     current_dir[0] = '\0';
     
-    
-    
-     
+    // Copy files
+    char src[50], dst[50];
 
-    uint16_t clusters[100];
-    get_free_clusters_test(fat, bpb, 5, clusters);    
-    write_file(fat, "TEST.TXT", current_dir_entry, clusters, 0x80000, 1, bpb, TEMP_LOAD_ADDR);
+    //strcpy_(dst,"flash2/fb/sb16/io2.sys");
+    //strcpy_(dst,"flash2/fb/io2.sys");
+    strcpy_(dst,"flash2/io2.sys");
+    //strcpy_(dst,"io2.sys");
+    
+    strcpy_(src, "flash2/xcopy.exe");
+    //strcpy_(src, "flash2/fb/install.exe");
+    //strcpy_(src, "flash2/fb/sb16/fb.cfg");
     
     
+    //printf_("cp %s %s\n", src, dst);
+    //copy_file(fat, bpb, current_dir_entry, src, dst, TEMP_LOAD_ADDR);
     
     // Initialize sub-directory names stack
     pwd_init();
@@ -590,35 +580,37 @@ void main() {
                 fat_standard(file_name, fat_name);
                 
                 if (!strcmp_(file_name, "."))
-                    break;    
+                    break;
+                    
+                if (pwd_top() == 0 && !strcmp_(file_name, "..")) // cd .. on root
+                    break;                   
+                
             
                 file_entry = find_file(current_dir_entry, bpb->root_entry_count, fat_name);
                 
-                printf_("file_entry: %X\n", file_entry);
-                
-                init_cluster = file_entry->current_cluster_low;
-                fsize = file_entry->size;
-                // init_cluster == 0: file not found or refers to root dir
-                
-                uint8_t is_root_dir = (!strcmp_(file_name, "..") && init_cluster == 0 && fsize == 0) ? 1 : 0;
-                               
-                if (init_cluster && fsize == 0) { // Ordinary directory ? (directory fsize == 0)  
-                    load_file(fat, init_cluster, (uint32_t)current_dir_entry, bpb, TEMP_LOAD_ADDR);
+                if (file_entry == 0) {
+                    printf_("'%s' not found bastard!!!\n",file_name);
+                    break;
+                }
+                             
+                if (file_entry->attributes == DIRECTORY) { // Ordinary directory 
+                    current_dir_cluster = file_entry->current_cluster_low;
+                    load_file(fat, current_dir_cluster, (uint32_t)current_dir_entry, bpb, TEMP_LOAD_ADDR);
                     
                     if (!strcmp_(file_name, "..")) {
                         strcpy_(current_dir, pwd_pop());
+                        
+                        if (pwd_top() == 0) {// return to root
+                            load_root_dir((uint8_t *)current_dir_entry, bpb, TEMP_LOAD_ADDR);
+                            puts_("load_root_dir\n");
+                        }
                     }
                     else {
                         pwd_push(current_dir);
                         strcpy_(current_dir, file_name);                
                     }               
                 }
-                else if (is_root_dir) {
-                    load_root_dir((uint8_t *)current_dir_entry, bpb, TEMP_LOAD_ADDR);
-                    if (pwd_top() > 0) // current_dir is not root ?
-                        strcpy_(current_dir, pwd_pop());
-                }
-                else if (fsize > 0 ) {
+                else if (file_entry->attributes == ARCHIVE) {
                     printf_("'%s' is not directory bastard!!!\n",file_name);
                 }
                 else
@@ -638,15 +630,20 @@ void main() {
                 fat_standard(file_name, fat_name);
                                                
                 file_entry = find_file(current_dir_entry, bpb->root_entry_count, fat_name);
-                init_cluster = file_entry->current_cluster_low;
-                fsize = file_entry->size;
                 
-                if (init_cluster > 0) {                               
-                    load_file(fat, init_cluster, HIGH_MEMORY, bpb, TEMP_LOAD_ADDR);
-                    more(HIGH_MEMORY, fsize);
+                if (file_entry == 0) {
+                    printf_("File '%s' not found bastard!!!\n", file_name);
+                    break;
                 }
-                else 
-                    printf_("File '%s' not found bastard!!!\n", file_name);           
+                
+                if (file_entry->attributes != ARCHIVE) {
+                    printf_("'%s' is not a file bastard!!!\n", file_name);
+                    break;
+                }
+                
+                init_cluster = file_entry->current_cluster_low;
+                load_file(fat, init_cluster, HIGH_MEMORY, bpb, TEMP_LOAD_ADDR);
+                more(HIGH_MEMORY, file_entry->size);
             break;
             
             case LINUX:
@@ -675,16 +672,23 @@ void main() {
                 }
                 
                 file_entry = find_file(current_dir_entry, bpb->root_entry_count, fat_name);
-                init_cluster = file_entry->current_cluster_low;
-                fsize = file_entry->size;
-                if (init_cluster > 0) {                               
-                    if (load_file(fat, init_cluster, addr, bpb, TEMP_LOAD_ADDR) == 0) {
-                        printf_("%s: loaded %d bytes at [%X]\n",file_name, fsize, TEMP_LOAD_ADDR);                
-                        printf_("%s: copied %d bytes to [%X]\n",file_name, fsize, addr);
-                    }
+                
+                if (file_entry == 0) {
+                    printf_("File %s not found bastard!!!\n", file_name); 
+                    break;
                 }
-                else 
-                    printf_("File %s not found bastard!!!\n", file_name);                
+                
+                if (file_entry->attributes != ARCHIVE) {
+                    printf_("'%s' is not a file bastard!!!\n", file_name); 
+                    break;
+                }
+                
+                init_cluster = file_entry->current_cluster_low;
+
+                if (load_file(fat, init_cluster, addr, bpb, TEMP_LOAD_ADDR) == 0) {
+                    printf_("%s: loaded %d bytes at [%X]\n",file_name, file_entry->size, TEMP_LOAD_ADDR);                
+                    printf_("%s: copied %d bytes to [%X]\n",file_name, file_entry->size, addr);
+                }           
             break;
             
             case RUN:
@@ -741,28 +745,45 @@ void main() {
                 mem_write(&cmd_line[n]);// n: skips the command 'mwrite'
             break;
             
+            case COPY:               
+                // Skip copy command
+                strtok_(cmd_line, ' ');
+                strcpy_(src, strtok_(0, ' '));
+                strcpy_(dst, strtok_(0, ' '));
+                
+                //printf_("token: %s\n", src);
+                //printf_("token: %s\n", dst);
+                              
+                copy_file(fat, bpb, current_dir_cluster, current_dir_entry, src, dst, TEMP_LOAD_ADDR);
+            break;
+            
             // Then test for executables
             default:
-                fat_standard(cmd_line, fat_name);            
+                if (cmd_line[0] == '\0')    // cmd_line is  empty
+                    break;
                 
+                fat_standard(cmd_line, fat_name);         
                 file_entry = find_file(current_dir_entry, bpb->root_entry_count, fat_name);
-                init_cluster = file_entry->current_cluster_low;
-                fsize = file_entry->size;
-                if (init_cluster > 0) {                               
-                    
-                    if (fsize > 0 && load_file(fat, init_cluster, HIGH_MEMORY, bpb, TEMP_LOAD_ADDR) == 0) {                    
-                        printf_("%s: loaded %d bytes at [%X]\n",cmd_line, fsize, TEMP_LOAD_ADDR);                
-                        printf_("%s: copied %d bytes to [%X]\n",cmd_line, fsize, HIGH_MEMORY);
-                        func_ptr = (void (*)(void))HIGH_MEMORY;
-
-                        // Fires loaded program
-                        func_ptr();  
-                    }
-                    else
-                        printf_("%s: is a directory bastard!!!\n", cmd_line);       
+                
+                if (file_entry == 0) {
+                    printf_("%s: command not found bastard!!!\n", cmd_line);
+                    break;
                 }
-                else if (cmd_line[0] != '\0')    // cmd_line is not empty
-                    printf_("%s: command not found bastard!!!\n", cmd_line);                
+                
+                if (file_entry->attributes == DIRECTORY) {
+                    printf_("%s: is a directory bastard!!!\n", cmd_line);
+                    break;
+                } 
+                
+                init_cluster = file_entry->current_cluster_low;
+
+                load_file(fat, init_cluster, HIGH_MEMORY, bpb, TEMP_LOAD_ADDR);                   
+                printf_("%s: loaded %d bytes at [%X]\n",cmd_line, file_entry->size, TEMP_LOAD_ADDR);                
+                printf_("%s: copied %d bytes to [%X]\n",cmd_line, file_entry->size, HIGH_MEMORY);
+                func_ptr = (void (*)(void))HIGH_MEMORY;
+
+                // Fires loaded program
+                func_ptr();  
             break;
         };
 

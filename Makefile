@@ -33,7 +33,7 @@ bootstrap:
 loader:
 	as --32 $(SRC_DIR)/ldlib.asm -o $(BUILD_DIR)/ldlib.o
 	gcc $(CFLAGS) -O2 -m32 -march=i386 -ffunction-sections $(SRC_DIR)/loader.c -o $(BUILD_DIR)/loader.o
-	ld $(LDFLAGS) -e entry -T loader.ld -o $(BUILD_DIR)/loader.elf $(BUILD_DIR)/ldlib.o $(BUILD_DIR)/loader.o  
+	ld $(LDFLAGS) -e entry -T loader.ld -o $(BUILD_DIR)/loader.elf $(BUILD_DIR)/ldlib.o $(BUILD_DIR)/loader.o  -M > $(BUILD_DIR)/loader.map
 	objcopy -O binary $(BUILD_DIR)/loader.elf $(BUILD_DIR)/loader.bin
 	objdump -M intel  -D $(BUILD_DIR)/loader.elf > $(BUILD_DIR)/loader.asm
 

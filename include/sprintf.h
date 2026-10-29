@@ -3,6 +3,58 @@
 #include <stdarg.h>
 
 
+
+
+// https://www.geeksforgeeks.org/cpp/implementing-of-strtok-function-in-c/
+char* strtok_ (char* s, char d) {
+
+    // Stores the state of string
+    static char* input = 0;
+    static char result[50];
+
+    // Initialize the input string
+    if (s != 0)
+        input = s;
+
+    // Case for final token
+    if (input == 0)
+        return 0;
+
+
+    // Stores the extracted string
+    //char* result = new char[strlen(input) + 1];
+    int i = 0;
+
+    // Start extracting string and
+    // store it in array
+    for (; input[i] != '\0'; i++) {
+
+        // If delimiter is not reached
+        // then add the current character
+        // to result[i]
+        if (input[i] != d)
+            result[i] = input[i];
+
+        // Else store the string formed
+        else {
+            result[i] = '\0';
+            input = input + i + 1;
+            return result;
+        }
+    }
+
+    // Case when loop ends
+    result[i] = '\0';
+    input = 0;
+
+    // Return the resultant pointer
+    // to the string
+    return result;
+}
+
+
+
+
 /*  Copy len characters from src to dest, and return dest
         - libgcc
             https://github.com/gcc-mirror/gcc/blob/master/libgcc/memcpy.c  */    

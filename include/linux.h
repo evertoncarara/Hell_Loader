@@ -59,83 +59,77 @@ int8_t load_linux(uint8_t *fat, struct Root_Entry *root_entry, struct BPB *bpb, 
     const uint32_t HEAP_END_ADDR                = 0xE000;      
     
     uint16_t init_cluster, clusters2sectors;
-    uint32_t fsize;
     uint8_t *load_ptr;
     struct Root_Entry *file_entry;
-
     struct setup_header *kernel_header;
     
-    
+
     file_entry = find_file(root_entry, bpb->root_entry_count, linux_img);
-    init_cluster = file_entry->current_cluster_low;
-    if (init_cluster > 0) {                               
 
-        // Read first cluster just to get the setup_sects
-        load_clusters(fat, init_cluster, 1, RUN_LINUX_ADDR, bpb);
-        kernel_header = (struct setup_header *)(RUN_LINUX_ADDR + 0x1F1); // Last bytes of kernel boot sector
-    
-
-        // Read boot sector and kernel setup
-        // Linux kernel partionated in 512 bytes sectors
-        if ((kernel_header->setup_sects + 1) % (bpb->sectors_per_cluster) != 0) {
-            printf_("ERROR loading %s: kernel setup_sects + 1 (%d) not multiple of sectors_per_cluster (%d)\n", linux_img, kernel_header->setup_sects + 1, bpb->sectors_per_cluster); 
-            for(;;);       
-        }       
-
-        clusters2sectors = (kernel_header->setup_sects + 1) / bpb->sectors_per_cluster;        
-      
-
-        init_cluster = load_clusters(fat, init_cluster, clusters2sectors, RUN_LINUX_ADDR, bpb);
-        
-        // init_cluster now is the first cluster of protected mode kernel code (skiped boot sector and kernel setup)  
-     
-        // 1.9. Sample Boot Configuartion (https://www.kernel.org/doc/html/v5.6/x86/boot.html)
-        kernel_header->type_of_loader = 0xFF; // Special (0xFF = undefined)
-        kernel_header->ramdisk_image = RAMDISK_IMAGE_ADDR;
-        kernel_header->heap_end_ptr = HEAP_END_ADDR - 0x200;
-        kernel_header->loadflags |= 0x80; /* CAN_USE_HEAP */
-        kernel_header->cmd_line_ptr = RUN_LINUX_ADDR + HEAP_END_ADDR;
-        strcpy_((char *)kernel_header->cmd_line_ptr, "auto"); // Fill in this field even if your boot loader does not support a command line, in which case you can point this to an empty string (or better yet, to the string “auto”.)
-        //strcpy_((char *)kernel_header->cmd_line_ptr, "rdinit=/etc/init.d/rc"); // rdinit: Fist process to execute
- 
-             
-        // Start protected mode kernel loading
-        load_ptr = (uint8_t *)KERNEL_PROTECTED_MODE_ADDR;
-        while(init_cluster < END_OF_CHAIN) {
-            // Uses here RAMDISK_IMAGE_ADDR as temporary address,
-            // to load kernel above 1MiB (protected mode)
-            init_cluster = load_clusters(fat, init_cluster, 1, RAMDISK_IMAGE_ADDR, bpb);
-            memcpy_(load_ptr, (uint8_t *)RAMDISK_IMAGE_ADDR, bpb->sectors_per_cluster * bpb->bytes_per_sector);
-            load_ptr += bpb->sectors_per_cluster * bpb->bytes_per_sector;
-        }
-        printf_("%s file loaded!\n",linux_img);
-      
-    }
-    else {
+    if (file_entry == 0) {
         printf_("%s not found bastard!!!\n", linux_img);
         return -1;    
     }
     
-    file_entry = find_file(root_entry, bpb->root_entry_count, ramdiskfs);
+    // Read first cluster just to get the setup_sects
     init_cluster = file_entry->current_cluster_low;
-    fsize = file_entry->size;
+    load_clusters(fat, init_cluster, 1, RUN_LINUX_ADDR, bpb);
+    kernel_header = (struct setup_header *)(RUN_LINUX_ADDR + 0x1F1); // Last bytes of kernel boot sector
     
-    if (init_cluster > 0) {                                           
+    // Read boot sector and kernel setup
+    // Linux kernel partionated in 512 bytes sectors
+    if ((kernel_header->setup_sects + 1) % (bpb->sectors_per_cluster) != 0) {
+        printf_("ERROR loading %s: kernel setup_sects + 1 (%d) not multiple of sectors_per_cluster (%d)\n", linux_img, kernel_header->setup_sects + 1, bpb->sectors_per_cluster); 
+        for(;;);       
+    }       
+
+    clusters2sectors = (kernel_header->setup_sects + 1) / bpb->sectors_per_cluster;        
+      
+    init_cluster = load_clusters(fat, init_cluster, clusters2sectors, RUN_LINUX_ADDR, bpb);
         
-        kernel_header->ramdisk_size = fsize;
-       
-        // Start ramdiskfs loading
-        load_ptr = (uint8_t *)RAMDISK_IMAGE_ADDR;
-        while(init_cluster < END_OF_CHAIN) {
-            init_cluster = load_clusters(fat, init_cluster, 1, (uint32_t)load_ptr, bpb);
-            load_ptr += bpb->sectors_per_cluster * bpb->bytes_per_sector;
-        }
-        printf_("%s file loaded!\n",ramdiskfs);
+    // init_cluster now is the first cluster of protected mode kernel code (skiped boot sector and kernel setup)  
+     
+    // 1.9. Sample Boot Configuartion (https://www.kernel.org/doc/html/v5.6/x86/boot.html)
+    kernel_header->type_of_loader = 0xFF; // Special (0xFF = undefined)
+    kernel_header->ramdisk_image = RAMDISK_IMAGE_ADDR;
+    kernel_header->heap_end_ptr = HEAP_END_ADDR - 0x200;
+    kernel_header->loadflags |= 0x80; /* CAN_USE_HEAP */
+    kernel_header->cmd_line_ptr = RUN_LINUX_ADDR + HEAP_END_ADDR;
+    strcpy_((char *)kernel_header->cmd_line_ptr, "auto"); // Fill in this field even if your boot loader does not support a command line, in which case you can point this to an empty string (or better yet, to the string “auto”.)
+    //strcpy_((char *)kernel_header->cmd_line_ptr, "rdinit=/etc/init.d/rc"); // rdinit: Fist process to execute
+ 
+             
+    // Start protected mode kernel loading
+    load_ptr = (uint8_t *)KERNEL_PROTECTED_MODE_ADDR;
+    while(init_cluster < END_OF_CHAIN) {
+        // Uses here RAMDISK_IMAGE_ADDR as temporary address,
+        // to load kernel above 1MiB (protected mode)
+        init_cluster = load_clusters(fat, init_cluster, 1, RAMDISK_IMAGE_ADDR, bpb);
+        memcpy_(load_ptr, (uint8_t *)RAMDISK_IMAGE_ADDR, bpb->sectors_per_cluster * bpb->bytes_per_sector);
+        load_ptr += bpb->sectors_per_cluster * bpb->bytes_per_sector;
     }
-    else {
+    printf_("%s file loaded!\n",linux_img);
+      
+    
+
+    
+    file_entry = find_file(root_entry, bpb->root_entry_count, ramdiskfs);
+    
+    if (file_entry == 0) {
         printf_("%s not found bastard!!!\n", ramdiskfs);
-        return -1;    
+        return -1;
     }
+    
+    init_cluster = file_entry->current_cluster_low;
+    kernel_header->ramdisk_size = file_entry->size;
+       
+    // Start ramdiskfs loading
+    load_ptr = (uint8_t *)RAMDISK_IMAGE_ADDR;
+    while(init_cluster < END_OF_CHAIN) {
+        init_cluster = load_clusters(fat, init_cluster, 1, (uint32_t)load_ptr, bpb);
+        load_ptr += bpb->sectors_per_cluster * bpb->bytes_per_sector;
+    }
+    printf_("%s file loaded!\n",ramdiskfs);
     
     
     // 1.12. Running the Kernel (https://www.kernel.org/doc/html/v5.6/x86/boot.html)

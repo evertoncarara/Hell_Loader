@@ -16,6 +16,8 @@ char *upper_case(char *str) {
     return str;
 }
 
+
+// Return the file directory entry or NULL if not found
 struct Root_Entry *find_file(struct Root_Entry *dir_entry, uint16_t count, char *name) {
     
     uint16_t found = 1;
@@ -79,42 +81,6 @@ int load_file(uint8_t *fat, uint16_t init_cluster, uint32_t addr, struct BPB *bp
     return 0;
 }
 
-
-void write_file(uint8_t *fat, char *name, struct Root_Entry *dir, uint16_t *clusters, uint32_t addr, uint32_t count, struct BPB *bpb, uint32_t temp_ram_area) {
-
-    uint16_t next_cluster;
-    uint32_t current_read_addr = addr;
-    uint32_t i;
-     
-    // Write the file cluster by cluster 
-    for (i = 0; i < count; i++) {            
-
-        // BIOS cant access memory above 1MiB
-        memcpy_((uint8_t *)temp_ram_area, (uint8_t *)current_read_addr, bpb->sectors_per_cluster * bpb->bytes_per_sector);
-        current_read_addr += bpb->sectors_per_cluster * bpb->bytes_per_sector;        
-        
-        next_cluster = (i == count - 1) ? END_OF_CHAIN : i + 1;   
-        write_cluster(fat, clusters[i], next_cluster, temp_ram_area, bpb);
-    }
-    
-    // Update FAT on disk
-    // BIOS cant access memory above 1MiB
-    memcpy_((uint8_t *)temp_ram_area, (uint8_t *)fat, bpb->sectors_per_fat * bpb->bytes_per_sector);
-    update_fat_disk ((uint8_t *)temp_ram_area, bpb);
-    
-    // Searches an available entry in current directory
-    struct Root_Entry *entry = dir;
-    for (i = 0; i < bpb->root_entry_count; i++, entry++) {
-        if (entry->name[0] == 0 || entry->name[0] == (char)0xE5)
-            break;
-    }
-    
-    fat_standard(name, entry->name);
-    entry->attributes = ARCHIVE;
-    entry->size = 0;
-    entry->current_cluster_low = clusters[0];
-    update_dir_entry_disk((uint8_t *)dir, bpb, temp_ram_area);   
-}
 
 
 void list_files(struct Root_Entry *dir_entry, uint16_t count) {
@@ -188,11 +154,10 @@ int get_free_clusters(uint8_t *fat, struct BPB *bpb, uint32_t count, uint16_t *c
     uint32_t entries = (bpb->sectors_per_fat * bpb->bytes_per_sector) / 2; // Each FAT16 entry has 2 bytes
     uint32_t i, j;
 
-    for(i = 0, j = 0; i < entries && j < count; i++)
-        if (fat16[i] == 0) {
+    for (i = 0, j = 0; i < entries && j < count; i++)
+        if (fat16[i] == 0) 
             clusters[j++] = i;
-            printf_("free cluster: %d\n",i); 
-        }
+        
             
     if (j < count) {
         printf_("get_free_clusters: only %d free clusters found. Required: %d\n", j,count);
@@ -203,21 +168,120 @@ int get_free_clusters(uint8_t *fat, struct BPB *bpb, uint32_t count, uint16_t *c
 }
 
 
-/*void copy_file(uint8_t *fat, struct BPB *bpb, struct Root_Entry *dir_entry, char *src, char *dst, uint32_t temp_ram_area) {
+void copy_file(uint8_t *fat, struct BPB *bpb, uint16_t current_dir_cluster, struct Root_Entry *dir_entry, char *src, char *dst, uint32_t temp_ram_area) {
     
-    uint16_t init_cluster;
-    uint32_t fsize;
+    uint16_t next_cluster_read, next_cluster_write;
     uint16_t clusters[100];
+    uint16_t cluster_count;
+    struct Root_Entry *file_entry, *search_dir;
+    uint16_t i;
+    uint32_t fsize;
+    uint16_t *fat16 = (uint16_t *)fat;
+    char fat_std[50];
+    char token[50], *next;
     
-    init_cluster = find_file(dir_entry, bpb->root_entry_count, src, &fsize);
-    if (init_cluster == 0) {
-        printf_("File '%s' not found bastard!!!\n", src);
+    
+    
+    /*** Searches for file entry on source directory ***/
+    
+    strcpy_(token, strtok_(src, '/')); // Initialize tokenizer
+    search_dir = dir_entry;
+    next_cluster_read = current_dir_cluster;
+    
+
+    while ((next = strtok_(0, '/'))) {
+        printf_("search for '%s'\n",token);
+        fat_standard(upper_case(token), fat_std);
+        search_dir = find_file(search_dir, bpb->root_entry_count, fat_std);
+        printf_("search_dir: %X\n",search_dir);        
+        next_cluster_read = search_dir->current_cluster_low;
+        printf_("next_cluster_read: %X\n",next_cluster_read);
+        load_file(fat, next_cluster_read, temp_ram_area, bpb, temp_ram_area);
+        search_dir = (struct Root_Entry *)temp_ram_area;
+        strcpy_(token, next);
+    }
+    printf_("found source directory: %X\n",search_dir);
+    printf_("next_cluster_read: %X\n",next_cluster_read);
+    printf_("token: %s\n", token);
+    printf_("pwd_top: %d\n", pwd_top());
+    pwd_print();
+    puts_("\n");
+           
+    fat_standard(upper_case(token), fat_std);
+    
+    file_entry = find_file(search_dir, bpb->root_entry_count, fat_std);
+    if (file_entry == 0) {
+        printf_("File '%s' not found bastard!!!\n", token);
         return;
     }
     
-    //get_free_clusters_test(fat, bpb, 5, clusters);
+    if (file_entry->attributes != ARCHIVE) {
+        printf_("'%s' is not a file bastard!!!\n", token);
+        return;    
+    }
     
-    //load_clusters(uint8_t *fat, uint16_t init_cluster, uint16_t count, uint32_t addr, struct BPB *bpb)
-    //void write_cluster(uint8_t *fat, uint16_t init_cluster, uint16_t next_cluster, uint32_t addr, struct BPB *bpb) {
-}*/
+    // Computes the file size in clusters
+    fsize = file_entry->size;
+    cluster_count = ((fsize / bpb->bytes_per_sector) + 1) / bpb->sectors_per_cluster + 1;
+    get_free_clusters(fat, bpb, cluster_count, clusters);
+    
+    // Copy file cluster by cluster and update FAT on RAM
+    for (i = 0, next_cluster_read = file_entry->current_cluster_low; i < cluster_count; i++) {
+        next_cluster_read = load_clusters (fat, next_cluster_read, 1, temp_ram_area, bpb);      
+        next_cluster_write = (i == cluster_count - 1) ? END_OF_CHAIN : clusters[i + 1];     
+        write_cluster (clusters[i], temp_ram_area, bpb);
+        
+        // Set next cluster on FAT
+        fat16[clusters[i]] = next_cluster_write; 
+    }
+
+  
+    update_fat_disk (fat, bpb, temp_ram_area);
+  
+   
+    /*** Searches for file entry on destination directory ***/
+    
+    strcpy_(token, strtok_(dst, '/')); // Initialize tokenizer
+    search_dir = dir_entry;
+    next_cluster_read = current_dir_cluster;      // Start indicating root directory
+    
+    while ((next = strtok_(0, '/'))) {
+        //printf_("search for '%s'\n",token);
+        fat_standard(upper_case(token), fat_std);
+        search_dir = find_file(search_dir, bpb->root_entry_count, fat_std);
+        //printf_("search_dir: %X\n",search_dir);        
+        next_cluster_read = search_dir->current_cluster_low;
+        //printf_("next_cluster_read: %X\n",next_cluster_read);
+        load_file(fat, next_cluster_read, temp_ram_area, bpb, temp_ram_area);
+        search_dir = (struct Root_Entry *)temp_ram_area;
+        strcpy_(token, next);
+    }
+    printf_("found destination directory: %X\n",search_dir);
+    printf_("next_cluster_read: %X\n",next_cluster_read);
+    printf_("root directory: %X\n", dir_entry);
+    printf_("token: %s\n", token);
+
+
+    // Find entry on destination directory
+    file_entry = search_dir;
+    for (i = 0; i < bpb->root_entry_count; i++, file_entry++) {
+        if (file_entry->name[0] == 0 || file_entry->name[0] == (char)0xE5)
+            break;
+    }
+    
+    if (i == bpb->root_entry_count) {
+        puts_("ERROR: no entry available in the current directory\n");
+        return;
+    }
+    
+    
+    // Set file attributes
+    fat_standard(upper_case(token), file_entry->name);
+    file_entry->attributes = ARCHIVE;
+    file_entry->size = fsize;
+    file_entry->current_cluster_low = clusters[0];
+    printf_("search_dir: %X\n",search_dir);
+    
+    update_dir_entry_disk((uint8_t *)search_dir, bpb, next_cluster_read, temp_ram_area);
+}
 
