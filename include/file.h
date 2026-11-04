@@ -5,7 +5,7 @@
 #include "disk.h"
 #include "key.h"
 
-
+#define IS_ROOT(name, dst_cluster)    (dst_cluster == 0 && (!strcmp_(name,"/") || !strcmp_(name,".") ||!strcmp_(name,"./")))
 
 char *upper_case(char *str) {
 
@@ -168,65 +168,199 @@ int get_free_clusters(uint8_t *fat, struct BPB *bpb, uint32_t count, uint16_t *c
 }
 
 
-void copy_file(uint8_t *fat, struct BPB *bpb, uint16_t current_dir_cluster, struct Root_Entry *dir_entry, char *src, char *dst, uint32_t temp_ram_area) {
+void copy_file(uint8_t *fat, struct BPB *bpb, struct Root_Entry *current_dir_entry, uint16_t current_dir_cluster, char *src, char *dst, uint32_t temp_ram_area) {
     
     uint16_t next_cluster_read, next_cluster_write;
     uint16_t clusters[100];
     uint16_t cluster_count;
-    struct Root_Entry *file_entry, *search_dir;
+    struct Root_Entry *entry, *dst_dir_entry, *aux_entry;
     uint16_t i;
-    uint32_t fsize;
+    uint32_t src_fsize;
     uint16_t *fat16 = (uint16_t *)fat;
     char fat_std[50];
-    char token[50], *next;
+    char token[50], *next, dst_name[12], src_file_name[12];
+
+
+    /*** Searches for source file entry on source directory ***/
+
+    // Set the initial directory for source file search
+    if (current_dir_cluster == 0 || src[0] == '/') {    // current_dir_cluster == 0: current directory is root 
+        load_root_dir((uint8_t *)temp_ram_area, bpb, temp_ram_area);
+        entry = (struct Root_Entry *)temp_ram_area;
+    }
+    else // current directory
+        entry = current_dir_entry;
     
-    
-    
-    /*** Searches for file entry on source directory ***/
-    
-    strcpy_(token, strtok_(src, '/')); // Initialize tokenizer
-    search_dir = dir_entry;
     next_cluster_read = current_dir_cluster;
     
 
-    while ((next = strtok_(0, '/'))) {
-        printf_("search for '%s'\n",token);
+    // Follows the directory path to find the source file
+    strcpy_(token, strtok_(src, "/")); // Initialize tokenizer
+    while ((next = strtok_(0, "/"))) {
+
+        // Skip "./" on root directory
+        if (!strcmp_(token,".") && next_cluster_read == 0) {
+            strcpy_(token, next);
+            continue;
+        }
+        
+        // Here 'token' should be a directory name
         fat_standard(upper_case(token), fat_std);
-        search_dir = find_file(search_dir, bpb->root_entry_count, fat_std);
-        printf_("search_dir: %X\n",search_dir);        
-        next_cluster_read = search_dir->current_cluster_low;
-        printf_("next_cluster_read: %X\n",next_cluster_read);
-        load_file(fat, next_cluster_read, temp_ram_area, bpb, temp_ram_area);
-        search_dir = (struct Root_Entry *)temp_ram_area;
+        entry = find_file(entry, bpb->root_entry_count, fat_std);
+        
+        if (entry == 0) {
+            printf_("'%s' not found bastard!!!\n", token);
+            return;
+        }
+        
+        if (entry->attributes != DIRECTORY) {
+            printf_("'%s' is not a directory bastard!!!\n", token);
+            return;
+        }
+        
+        next_cluster_read = entry->current_cluster_low;
+        
+        if (next_cluster_read == 0) // root 
+            load_root_dir((uint8_t *)temp_ram_area, bpb, temp_ram_area);
+        else
+            load_file(fat, next_cluster_read, temp_ram_area, bpb, temp_ram_area);
+        
+        entry = (struct Root_Entry *)temp_ram_area;
         strcpy_(token, next);
     }
-    printf_("found source directory: %X\n",search_dir);
-    printf_("next_cluster_read: %X\n",next_cluster_read);
-    printf_("token: %s\n", token);
-    printf_("pwd_top: %d\n", pwd_top());
-    pwd_print();
-    puts_("\n");
-           
+
+    // Here 'token' must be the source file name
     fat_standard(upper_case(token), fat_std);
+    strcpy_(src_file_name, token);
     
-    file_entry = find_file(search_dir, bpb->root_entry_count, fat_std);
-    if (file_entry == 0) {
+    // Searches the file in source directory
+    entry = find_file(entry, bpb->root_entry_count, fat_std);
+    if (entry == 0) {
         printf_("File '%s' not found bastard!!!\n", token);
         return;
     }
     
-    if (file_entry->attributes != ARCHIVE) {
+    if (entry->attributes != ARCHIVE) {
         printf_("'%s' is not a file bastard!!!\n", token);
         return;    
     }
     
+    // Save file information because 'temp_ram_area', pointed by 'entry', will be modified below
+    src_fsize = entry->size;
+    next_cluster_read = entry->current_cluster_low;
+    
+
+    
+    
+    /*** Searches for destination file entry on destination directory ***/
+    
+    // Set the initial directory for file search
+    uint16_t dst_cluster;
+    if (current_dir_cluster == 0 || dst[0] == '/') { // root directory
+        load_root_dir((uint8_t *)temp_ram_area, bpb, temp_ram_area);
+        entry = (struct Root_Entry *)temp_ram_area;
+        dst_cluster = 0;
+    }
+    else { // current directory
+        entry = current_dir_entry;
+        dst_cluster = current_dir_cluster;
+    }
+    
+
+    // Follows the directory path to find the destination directory 
+    strcpy_(token, strtok_(dst, "/")); // Initialize tokenizer
+    while ((next = strtok_(0, "/"))) {
+        
+        // Skip "./" on root directory
+        if (!strcmp_(token,".") && dst_cluster == 0) {
+            strcpy_(token, next);
+            continue;
+        }
+        
+        // Here 'token' should be a directory name
+        fat_standard(upper_case(token), fat_std);
+        entry = find_file(entry, bpb->root_entry_count, fat_std);
+        
+        if (entry == 0) {
+            printf_("'%s' not found bastard!!!\n", token);
+            return;
+        }
+        
+        if (entry->attributes != DIRECTORY) {
+            printf_("'%s' is not a directory bastard!!!\n", token);
+            return;
+        }
+        
+        dst_cluster = entry->current_cluster_low;
+        
+        if (dst_cluster == 0) // root
+            load_root_dir((uint8_t *)temp_ram_area, bpb, temp_ram_area);
+        else
+            load_file(fat, dst_cluster, temp_ram_area, bpb, temp_ram_area);
+        
+        entry = (struct Root_Entry *)temp_ram_area;
+        strcpy_(token, next);
+    }
+    
+    // Here 'token' is a file or directory name
+    strcpy_(dst_name, token);    
+    printf_("dst_name: %s\n",dst_name);
+   
+    // If 'dst_name' is a file: 'entry' points the destination directory entry
+    // If 'dst_name' is a directory (destination): 'entry' points its parent directory entry
+    
+    // In case of file, verifies if the destination file already exist
+    fat_standard(upper_case(dst_name), fat_std);
+    aux_entry = find_file(entry, bpb->root_entry_count, fat_std);    
+    
+    if (aux_entry->attributes == ARCHIVE) { // destination file specified
+        printf_("'%s' already exist on destination directory!\n",dst_name);
+        puts_("Aborting copy.\n");
+        return;    
+    }
+    
+    // In case of directory, lead the destination directory and verifies if the destination file already exist
+    if (aux_entry->attributes == DIRECTORY || IS_ROOT(dst, dst_cluster)) { // only destination directory specified
+        
+        if (IS_ROOT(dst, dst_cluster))
+            puts_("Destination is a directory: root\n");
+        else
+            printf_("Destination is a directory: '%s'\n",dst_name);
+        
+        if (aux_entry->current_cluster_low == 0 || IS_ROOT(dst, dst_cluster)) // root
+            load_root_dir((uint8_t *)temp_ram_area, bpb, temp_ram_area);
+        else
+            load_file(fat, aux_entry->current_cluster_low, temp_ram_area, bpb, temp_ram_area);
+        
+        entry = (struct Root_Entry *)temp_ram_area;        
+        
+        printf_("Searching for '%s' in directory '%s'\n",src_file_name, dst_name);
+        fat_standard(upper_case(src_file_name), fat_std);
+        aux_entry = find_file(entry, bpb->root_entry_count, fat_std);
+        if (aux_entry != 0 && aux_entry->attributes == ARCHIVE) {
+            printf_("'%s' already exist on destination directory!\n",src_file_name);
+            puts_("Aborting copy.\n");
+            return;    
+        }        
+    }
+    else
+        printf_("'%s' doest not exist on destination directory\n",dst_name);
+    
+    
+    
+    
+
+
+    /*** Start file copying ***/
+    
+    puts_("Copying...\n");
+    
     // Computes the file size in clusters
-    fsize = file_entry->size;
-    cluster_count = ((fsize / bpb->bytes_per_sector) + 1) / bpb->sectors_per_cluster + 1;
+    cluster_count = ((src_fsize / bpb->bytes_per_sector) + 1) / bpb->sectors_per_cluster + 1;
     get_free_clusters(fat, bpb, cluster_count, clusters);
     
     // Copy file cluster by cluster and update FAT on RAM
-    for (i = 0, next_cluster_read = file_entry->current_cluster_low; i < cluster_count; i++) {
+    for (i = 0; i < cluster_count; i++) {
         next_cluster_read = load_clusters (fat, next_cluster_read, 1, temp_ram_area, bpb);      
         next_cluster_write = (i == cluster_count - 1) ? END_OF_CHAIN : clusters[i + 1];     
         write_cluster (clusters[i], temp_ram_area, bpb);
@@ -235,37 +369,41 @@ void copy_file(uint8_t *fat, struct BPB *bpb, uint16_t current_dir_cluster, stru
         fat16[clusters[i]] = next_cluster_write; 
     }
 
+    update_disk_fat (fat, bpb, temp_ram_area);
   
-    update_fat_disk (fat, bpb, temp_ram_area);
   
-   
-    /*** Searches for file entry on destination directory ***/
+  
+    /*** Add the file name on destination directory ***/
     
-    strcpy_(token, strtok_(dst, '/')); // Initialize tokenizer
-    search_dir = dir_entry;
-    next_cluster_read = current_dir_cluster;      // Start indicating root directory
+    if (dst_cluster == 0) // destination directory is root directory
+        load_root_dir((uint8_t *)temp_ram_area, bpb, temp_ram_area);
+    else
+        load_file(fat, dst_cluster, temp_ram_area, bpb, temp_ram_area);
     
-    while ((next = strtok_(0, '/'))) {
-        //printf_("search for '%s'\n",token);
-        fat_standard(upper_case(token), fat_std);
-        search_dir = find_file(search_dir, bpb->root_entry_count, fat_std);
-        //printf_("search_dir: %X\n",search_dir);        
-        next_cluster_read = search_dir->current_cluster_low;
-        //printf_("next_cluster_read: %X\n",next_cluster_read);
-        load_file(fat, next_cluster_read, temp_ram_area, bpb, temp_ram_area);
-        search_dir = (struct Root_Entry *)temp_ram_area;
-        strcpy_(token, next);
+    // If 'dst_name' is a file: 'dst_dir_entry' points the destination directory entry
+    // If 'dst_name' is a directory (destination): 'dst_dir_entry' points its parent directory entry
+    dst_dir_entry = (struct Root_Entry *)temp_ram_area;
+        
+    fat_standard(upper_case(dst_name), fat_std);
+    entry = find_file(dst_dir_entry, bpb->root_entry_count, fat_std);
+    
+    // Add source file name when only destination directory is specified
+    if (dst_cluster == 0)  // dst_name: /
+        strcpy_(dst_name, src_file_name);
+    
+    else if (entry->attributes == DIRECTORY) { // ordinary destination directory
+        dst_cluster = entry->current_cluster_low;
+        if (dst_cluster == 0) // dst_name: ../
+            load_root_dir((uint8_t *)temp_ram_area, bpb, temp_ram_area);
+        else
+            load_file(fat, dst_cluster, temp_ram_area, bpb, temp_ram_area);
+        dst_dir_entry = (struct Root_Entry *)temp_ram_area;
+        strcpy_(dst_name, src_file_name);
     }
-    printf_("found destination directory: %X\n",search_dir);
-    printf_("next_cluster_read: %X\n",next_cluster_read);
-    printf_("root directory: %X\n", dir_entry);
-    printf_("token: %s\n", token);
-
-
+    
     // Find entry on destination directory
-    file_entry = search_dir;
-    for (i = 0; i < bpb->root_entry_count; i++, file_entry++) {
-        if (file_entry->name[0] == 0 || file_entry->name[0] == (char)0xE5)
+    for (i = 0, entry = dst_dir_entry; i < bpb->root_entry_count; i++, entry++) {
+        if (entry->name[0] == 0 || entry->name[0] == (char)0xE5)
             break;
     }
     
@@ -274,14 +412,17 @@ void copy_file(uint8_t *fat, struct BPB *bpb, uint16_t current_dir_cluster, stru
         return;
     }
     
+    // Set destination file attributes
+    fat_standard(upper_case(dst_name), entry->name);
+    entry->attributes = ARCHIVE;
+    entry->size = src_fsize;
+    entry->current_cluster_low = clusters[0];
     
-    // Set file attributes
-    fat_standard(upper_case(token), file_entry->name);
-    file_entry->attributes = ARCHIVE;
-    file_entry->size = fsize;
-    file_entry->current_cluster_low = clusters[0];
-    printf_("search_dir: %X\n",search_dir);
+    // Is dst_cluster always 0 when destination directory is root???
+    update_disk_dir ((uint8_t *)dst_dir_entry, bpb, dst_cluster, temp_ram_area);
     
-    update_dir_entry_disk((uint8_t *)search_dir, bpb, next_cluster_read, temp_ram_area);
+    // Update current directory on RAM
+    if (dst_cluster == current_dir_cluster)
+        memcpy_((uint8_t *)current_dir_entry, (uint8_t *)temp_ram_area, bpb->root_entry_count * 32); 
 }
 

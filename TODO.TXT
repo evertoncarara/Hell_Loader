@@ -1,7 +1,12 @@
+- copy_file: suporte a copia sem especificar  o nome do arquivo destino
 - refatorar onde tem chamada para find_file. Testar retorno antes de usar, pois pode nao ter achado o file
 - refatorar linux.h e dos.h nas alterações relativas ao find_file
-
-- adicionar um entrada no diretório para o nome do arquivo
+- refatorar funções que tem fat, bpb, e temp_ram_area, colocar esses como os primeiros parametros
+- Remover prints: file.h, disk.h, loader.c
+- Trocar get_token por strtok
+- Entender o memory footprint do loader
+- cd/ls com suporte a path e cd /
+- rm/del, mkdir e move/mv
 - memory_map.h: para poder remover das funções parametros relativos a endereços de memória q são constantes (fat, bpb, ...)
 
 

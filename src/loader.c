@@ -538,19 +538,6 @@ void main() {
     
     // Copy files
     char src[50], dst[50];
-
-    //strcpy_(dst,"flash2/fb/sb16/io2.sys");
-    //strcpy_(dst,"flash2/fb/io2.sys");
-    strcpy_(dst,"flash2/io2.sys");
-    //strcpy_(dst,"io2.sys");
-    
-    strcpy_(src, "flash2/xcopy.exe");
-    //strcpy_(src, "flash2/fb/install.exe");
-    //strcpy_(src, "flash2/fb/sb16/fb.cfg");
-    
-    
-    //printf_("cp %s %s\n", src, dst);
-    //copy_file(fat, bpb, current_dir_entry, src, dst, TEMP_LOAD_ADDR);
     
     // Initialize sub-directory names stack
     pwd_init();
@@ -559,7 +546,42 @@ void main() {
     doskey_init();
     
     strcpy_(current_dir, "root");   
-    prompt(current_dir);  
+    prompt(current_dir);
+    current_dir_cluster = 0;  
+    
+    
+    
+/*** TEST OF COPY ****/
+    /*
+    strcpy_(src, "io.sys");
+    strcpy_(dst,"flash2/io1.sys");
+    printf_("cp %s %s\n", src, dst);
+    copy_file(fat, bpb, current_dir_entry, current_dir_cluster, src, dst, TEMP_LOAD_ADDR);
+    
+    strcpy_(src, "./io.sys");
+    strcpy_(dst,"./flash2/io2.sys");
+    printf_("cp %s %s\n", src, dst);
+    copy_file(fat, bpb, current_dir_entry, current_dir_cluster, src, dst, TEMP_LOAD_ADDR);
+    
+    
+    strcpy_(src, "/flash2/run.bat");
+    strcpy_(dst,"./flash2/fb/run1.bat");
+    printf_("cp %s %s\n", src, dst);
+    copy_file(fat, bpb, current_dir_entry, current_dir_cluster, src, dst, TEMP_LOAD_ADDR);
+    
+    strcpy_(src, "flash2/fb/fb.cfg");
+    strcpy_(dst,"flash2/fb/cfg.bat");
+    printf_("cp %s %s\n", src, dst);
+    copy_file(fat, bpb, current_dir_entry, current_dir_cluster, src, dst, TEMP_LOAD_ADDR);
+    
+    strcpy_(src, "config.sys");
+    strcpy_(dst,"flash2/conf.sys");
+    printf_("cp %s %s\n", src, dst);
+    copy_file(fat, bpb, current_dir_entry, current_dir_cluster, src, dst, TEMP_LOAD_ADDR);*/
+
+/******************************************************/
+    
+    
     
     // Command line interface
     while(1) {
@@ -602,7 +624,7 @@ void main() {
                         
                         if (pwd_top() == 0) {// return to root
                             load_root_dir((uint8_t *)current_dir_entry, bpb, TEMP_LOAD_ADDR);
-                            puts_("load_root_dir\n");
+                            //puts_("load_root_dir\n");
                         }
                     }
                     else {
@@ -746,15 +768,25 @@ void main() {
             break;
             
             case COPY:               
-                // Skip copy command
-                strtok_(cmd_line, ' ');
-                strcpy_(src, strtok_(0, ' '));
-                strcpy_(dst, strtok_(0, ' '));
+                n = get_token(cmd_line, n, src);
                 
-                //printf_("token: %s\n", src);
-                //printf_("token: %s\n", dst);
-                              
-                copy_file(fat, bpb, current_dir_cluster, current_dir_entry, src, dst, TEMP_LOAD_ADDR);
+                if (strlen_(src) == 0) {
+                    puts_("Sintax: cp <src_file> <destination file or directory>\n");
+                    break;
+                }
+                
+                n = get_token(cmd_line, n, dst);
+                
+                if (strlen_(dst) == 0) {
+                    puts_("Sintax: cp <src_file> <destination file or directory>\n");
+                    break;
+                }
+                
+                //strtok_(cmd_line, " "); // Skip copy command
+                //strcpy_(src, strtok_(0, " "));
+                //strcpy_(dst, strtok_(0, " "));
+
+                copy_file(fat, bpb, current_dir_entry, current_dir_cluster, src, dst, TEMP_LOAD_ADDR);
             break;
             
             // Then test for executables

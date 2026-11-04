@@ -60,7 +60,7 @@ void write_cluster(uint16_t init_cluster, uint32_t addr, struct BPB *bpb) {
 
 
 // Write back FAT on disk
-void update_fat_disk (uint8_t *fat, struct BPB *bpb, uint32_t temp_ram_area) {
+void update_disk_fat (uint8_t *fat, struct BPB *bpb, uint32_t temp_ram_area) {
     
     // When using BIOS INT 13h extended write functions (such as AH=43h), 
     // the maximum number of sectors that can be transferred in a single call is 127
@@ -82,8 +82,8 @@ void update_fat_disk (uint8_t *fat, struct BPB *bpb, uint32_t temp_ram_area) {
         lba = bpb->hidden_sector_count + bpb->reserved_sectors + (j * bpb->sectors_per_fat);     
         fat_temp = (uint8_t *)temp_ram_area;
         
-        printf_("lba: %X\n",lba);
-        printf_("fat_temp: %X\n",fat_temp);
+        //printf_("lba: %X\n",lba);
+        //printf_("fat_temp: %X\n",fat_temp);
         
         // Write chuncks of max_write_sectors
         for (uint8_t i = 0; i < count; i++, lba += max_write_sectors, fat_temp += max_write_sectors * bpb->bytes_per_sector) {
@@ -103,7 +103,7 @@ void update_fat_disk (uint8_t *fat, struct BPB *bpb, uint32_t temp_ram_area) {
 
 
 // Write back directory on disk
-void update_dir_entry_disk(uint8_t *dir, struct BPB *bpb, uint16_t init_cluster, uint32_t temp_ram_area) {
+void update_disk_dir (uint8_t *dir, struct BPB *bpb, uint16_t init_cluster, uint32_t temp_ram_area) {
        
     uint16_t lba_high, lba_low;
     uint16_t segment, offset;    
@@ -112,11 +112,14 @@ void update_dir_entry_disk(uint8_t *dir, struct BPB *bpb, uint16_t init_cluster,
     uint32_t first_data_sector;
     
     // Set the initial directory sector
-    if (pwd_top() == 0) // root dir
+    if (init_cluster == 0) {// root dir
         lba = bpb->hidden_sector_count + bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat);
+        //puts_("update_dir_entry_disk: root\n");
+    }
     else {
         first_data_sector = bpb->hidden_sector_count + bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat) + (bpb->root_entry_count * 32) / bpb->bytes_per_sector;    
         lba = first_data_sector + (init_cluster - 2) * bpb->sectors_per_cluster; // -2: First two entries in FAT are reserved
+        //puts_("update_dir_entry_disk: ordinary directory\n");
     }
     
     // BIOS cant access memory above 1MiB
