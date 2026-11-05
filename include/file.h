@@ -5,8 +5,6 @@
 #include "disk.h"
 #include "key.h"
 
-#define IS_ROOT(name, dst_cluster)    (dst_cluster == 0 && (!strcmp_(name,"/") || !strcmp_(name,".") ||!strcmp_(name,"./")))
-
 char *upper_case(char *str) {
 
     for (uint8_t i = 0; str[i] != '\0'; i++) 
@@ -320,14 +318,14 @@ void copy_file(uint8_t *fat, struct BPB *bpb, struct Root_Entry *current_dir_ent
     }
     
     // In case of directory, lead the destination directory and verifies if the destination file already exist
-    if (aux_entry->attributes == DIRECTORY || IS_ROOT(dst, dst_cluster)) { // only destination directory specified
-        
-        if (IS_ROOT(dst, dst_cluster))
+    if (aux_entry->attributes == DIRECTORY || dst_cluster == 0) { // only destination directory specified
+       
+        if (dst_cluster == 0)
             puts_("Destination is a directory: root\n");
         else
             printf_("Destination is a directory: '%s'\n",dst_name);
         
-        if (aux_entry->current_cluster_low == 0 || IS_ROOT(dst, dst_cluster)) // root
+        if (aux_entry->current_cluster_low == 0 || dst_cluster == 0) // root
             load_root_dir((uint8_t *)temp_ram_area, bpb, temp_ram_area);
         else
             load_file(fat, aux_entry->current_cluster_low, temp_ram_area, bpb, temp_ram_area);
