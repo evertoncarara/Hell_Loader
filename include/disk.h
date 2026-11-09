@@ -103,7 +103,7 @@ void update_disk_fat (uint8_t *fat, struct BPB *bpb, uint32_t temp_ram_area) {
 
 
 // Write back directory on disk
-void update_disk_dir (uint8_t *dir, struct BPB *bpb, uint16_t init_cluster, uint32_t temp_ram_area) {
+void update_disk_dir (uint8_t *dir, struct BPB *bpb, uint16_t cluster, uint32_t temp_ram_area) {
        
     uint16_t lba_high, lba_low;
     uint16_t segment, offset;    
@@ -112,14 +112,11 @@ void update_disk_dir (uint8_t *dir, struct BPB *bpb, uint16_t init_cluster, uint
     uint32_t first_data_sector;
     
     // Set the initial directory sector
-    if (init_cluster == 0) {// root dir
+    if (cluster == 0) // root dir
         lba = bpb->hidden_sector_count + bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat);
-        //puts_("update_dir_entry_disk: root\n");
-    }
     else {
         first_data_sector = bpb->hidden_sector_count + bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat) + (bpb->root_entry_count * 32) / bpb->bytes_per_sector;    
-        lba = first_data_sector + (init_cluster - 2) * bpb->sectors_per_cluster; // -2: First two entries in FAT are reserved
-        //puts_("update_dir_entry_disk: ordinary directory\n");
+        lba = first_data_sector + (cluster - 2) * bpb->sectors_per_cluster; // -2: First two entries in FAT are reserved
     }
     
     // BIOS cant access memory above 1MiB

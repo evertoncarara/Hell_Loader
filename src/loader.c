@@ -37,7 +37,9 @@
 #define GET_TIME    14
 #define SET_TIME    15
 #define MEM_WRITE   16
-#define COPY        17        
+#define COPY        17 
+#define MKDIR       18
+        
 
 // https://wiki.osdev.org/Detecting_Memory_(x86)#BIOS_Function:_INT_0x15,_EAX_=_0xE820
 struct SMAP_entry_t {
@@ -227,6 +229,7 @@ uint8_t get_command(char *cmd) {
     if (!strcmp_(cmd, "stime"))     return SET_TIME;
     if (!strcmp_(cmd, "mwrite"))    return MEM_WRITE;
     if (!strcmp_(cmd, "cp") || !strcmp_(cmd, "copy"))    return COPY;
+    if (!strcmp_(cmd, "md") || !strcmp_(cmd, "mkdir"))    return MKDIR;
     
     return UNKNOWN;    
 }
@@ -780,13 +783,24 @@ void main() {
                 if (strlen_(dst) == 0) {
                     puts_("Sintax: cp <src_file> <destination file or directory>\n");
                     break;
-                }
-                
+                }                
+               
                 //strtok_(cmd_line, " "); // Skip copy command
                 //strcpy_(src, strtok_(0, " "));
                 //strcpy_(dst, strtok_(0, " "));
 
                 copy_file(fat, bpb, current_dir_entry, current_dir_cluster, src, dst, TEMP_LOAD_ADDR);
+            break;
+            
+            case MKDIR:
+                n = get_token(cmd_line, n, token);
+                
+                if (strlen_(token) == 0) {
+                    puts_("Sintax: mkdir <name>\n");
+                    break;
+                }
+                
+                make_dir (fat, bpb, current_dir_entry, current_dir_cluster, token, TEMP_LOAD_ADDR);
             break;
             
             // Then test for executables
