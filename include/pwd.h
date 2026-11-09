@@ -1,9 +1,9 @@
 #include "sprintf.h"
 
-#define PWD_STACK_SIZE  100
+#define PWD_STACK_SIZE  20
 
 struct PwdStack {
-    char data[PWD_STACK_SIZE][50];
+    char data[PWD_STACK_SIZE][20];
     int top;
 };
 

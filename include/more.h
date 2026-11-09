@@ -1,4 +1,4 @@
-#define MORE_STACK_SIZE 1000
+#define MORE_STACK_SIZE 100
 
 struct MoreStack {
     char *data[MORE_STACK_SIZE];

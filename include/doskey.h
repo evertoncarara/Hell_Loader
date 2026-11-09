@@ -1,9 +1,9 @@
 #include "printf.h" // printf_(), strcpy_()
 
-#define BUFFER_SIZE 500
+#define BUFFER_SIZE 30
 
 struct CircularBuffer {
-    char data[BUFFER_SIZE][100];
+    char data[BUFFER_SIZE][50];
     uint16_t head;       // Next write position
     uint16_t count;      // Number of elements currently in the buffer
     uint16_t i;  
