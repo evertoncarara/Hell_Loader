@@ -1,61 +1,63 @@
 #pragma once
 
 #include <stdarg.h>
+#include <stddef.h> // For NULL
 
 // IA generated
-// Helper function to check if a character is a delimiter
-int is_delimiter(char c, const char *delims) {
-    while (*delims) {
-        if (c == *delims) {
+// Helper function to check if a character matches any delimiter
+static int is_delimiter(char c, const char *delim) {
+    while (*delim != '\0') {
+        if (c == *delim) {
             return 1;
         }
-        delims++;
+        delim++;
     }
     return 0;
 }
 
 // IA generated
-// Custom strtok implementation
-char *strtok_(char *str, const char *delims) {
-    // static variable holds the context across multiple function calls
-    static char *last_str = 0;
+char *strtok_(char *str, const char *delim) {
+    // Keeps track of the remainder of the string across function calls
+    static char *last_pos = NULL;
 
-    // If a new string is passed, reset our tracker
-    if (str != 0) {
-        last_str = str;
+    // If a new string is passed, reset the internal position pointer
+    if (str != NULL) {
+        last_pos = str;
     }
 
-    // If last_str is NULL or we've reached the end of the string, no tokens left
-    if (last_str == 0 || *last_str == '\0') {
-        return 0;
+    // If the internal position is NULL or we've reached the end, no tokens remain
+    if (last_pos == NULL || *last_pos == '\0') {
+        return NULL;
     }
 
-    // Phase 1: Skip leading delimiters
-    while (*last_str && is_delimiter(*last_str, delims)) {
-        last_str++;
+    // Step 1: Skip any leading delimiters
+    while (*last_pos != '\0' && is_delimiter(*last_pos, delim)) {
+        last_pos++;
     }
 
-    // If skipping delimiters brought us to the end of the string, return NULL
-    if (*last_str == '\0') {
-        last_str = 0; 
-        return 0;
+    // If skipping delimiters brings us to the end, return NULL
+    if (*last_pos == '\0') {
+        last_pos = NULL;
+        return NULL;
     }
 
-    // The start of our token
-    char *token_start = last_str;
+    // Mark the beginning of the actual token
+    char *token_start = last_pos;
 
-    // Phase 2: Find the end of the token
-    while (*last_str) {
-        if (is_delimiter(*last_str, delims)) {
-            *last_str = '\0'; // Overwrite the delimiter with a null terminator
-            last_str++;       // Point to the beginning of the next potential token
+    // Step 2: Find the end of the token
+    while (*last_pos != '\0') {
+        if (is_delimiter(*last_pos, delim)) {
+            // Cut the string by placing a null terminator over the delimiter
+            *last_pos = '\0';
+            // Set up last_pos for the next subsequent call
+            last_pos++;
             return token_start;
         }
-        last_str++;
+        last_pos++;
     }
 
-    // If we reached the end of the string without hitting another delimiter
-    last_str = 0;
+    // If we hit the end of the string without hitting another delimiter
+    last_pos = NULL; 
     return token_start;
 }
 
