@@ -93,12 +93,16 @@ void list_files(struct Root_Entry *dir_entry, uint16_t count) {
     uint16_t entry;
     uint32_t total_size = 0;       
        
-    /*
-    DIR_Name[0]: the value 0x00 indicates that the entry is not used and in addition, 
-    there is no allocated entry after this one 
-        https://elm-chan.org/docs/fat_e.html#dir_struct
-    */   
-    for(entry = 0; entry < count && dir_entry->name[0] != 0x00; entry++, dir_entry++)  {
+       
+    for(entry = 0; entry < count; entry++, dir_entry++)  {
+    
+        /*
+            DIR_Name[0]: the value 0x00 indicates that the entry is not used and in addition, 
+            there is no allocated entry after this one. The value 0xE5 indicates a removed entry. 
+                https://elm-chan.org/docs/fat_e.html#dir_struct
+        */
+        if (dir_entry->name[0] == 0x00 || dir_entry->name[0] == (char)0xE5)
+            continue;
 
         if (dir_entry->attributes == ARCHIVE || dir_entry->attributes == DIRECTORY) {
             
@@ -154,7 +158,7 @@ int get_free_clusters(uint8_t *fat, struct BPB *bpb, uint32_t count, uint16_t *c
     uint32_t i, j;
 
     for (i = 0, j = 0; i < entries && j < count; i++)
-        if (fat16[i] == 0) 
+        if (fat16[i] == 0) // free ?
             clusters[j++] = i;
         
             
@@ -170,6 +174,8 @@ int get_free_clusters(uint8_t *fat, struct BPB *bpb, uint32_t count, uint16_t *c
 // Follows a directory path tokenizing it
 //  Return:
 //          - directory 'entry' pointer
+//              - 'entry' points the file directory if file name is specified
+//              - 'entry' points the parent directory of specified directory, when file name is not specified
 //          - last 'token'' of string path
 //          - 'last_cluster' correspondig to directory 'entry' pointer
 struct Root_Entry *follow_path (uint8_t *fat, struct BPB *bpb, struct Root_Entry *current_dir_entry, uint16_t current_dir_cluster, char *name, uint32_t temp_ram_area, char *token, uint16_t *last_cluster) {
@@ -178,15 +184,16 @@ struct Root_Entry *follow_path (uint8_t *fat, struct BPB *bpb, struct Root_Entry
     struct Root_Entry *entry;
     char fat_std[50], *next;
 
-    // Set the initial directory for source file search
+    // Set the initial directory for file search
     if (current_dir_cluster == 0 || name[0] == '/') {    // current_dir_cluster == 0: current directory is root 
         load_root_dir((uint8_t *)temp_ram_area, bpb, temp_ram_area);
         entry = (struct Root_Entry *)temp_ram_area;
+        aux_cluster = 0;
     }
-    else // current directory
+    else {// current directory
         entry = current_dir_entry;
-    
-    aux_cluster = current_dir_cluster;    
+        aux_cluster = current_dir_cluster;    
+    }
 
     // Follows the directory path to find the source/destination name
     strcpy_(token, strtok_(name, "/")); // Initialize tokenizer
@@ -230,7 +237,7 @@ struct Root_Entry *follow_path (uint8_t *fat, struct BPB *bpb, struct Root_Entry
      return entry;
 }
 
-void copy_file(uint8_t *fat, struct BPB *bpb, struct Root_Entry *current_dir_entry, uint16_t current_dir_cluster, char *src, char *dst, uint32_t temp_ram_area) {
+void copy_file (uint8_t *fat, struct BPB *bpb, struct Root_Entry *current_dir_entry, uint16_t current_dir_cluster, char *src, char *dst, uint32_t temp_ram_area) {
     
     uint16_t next_cluster_read, next_cluster_write, last_cluster;
     uint16_t clusters[50];
@@ -364,10 +371,6 @@ void copy_file(uint8_t *fat, struct BPB *bpb, struct Root_Entry *current_dir_ent
   
   
   
-  
-  
-  
-  
     /*** Add the file name in destination directory ***/
     
     if (dst_cluster == 0) // destination directory is root directory
@@ -461,6 +464,63 @@ void make_dir (uint8_t *fat, struct BPB *bpb, struct Root_Entry *current_dir_ent
     
     // Update current directory on disk
     update_disk_dir ((uint8_t *)current_dir_entry, bpb, current_dir_cluster, temp_ram_area);
+}
+
+
+void remove_file (uint8_t *fat, struct BPB *bpb, struct Root_Entry *current_dir_entry, uint16_t current_dir_cluster, char *name, uint32_t temp_ram_area) {
+    
+    struct Root_Entry *file_entry, *target_dir_entry;
+    uint16_t *fat16 = (uint16_t *)fat;
+    uint16_t next_cluster, free_cluster, target_cluster;
+    char fat_std[50];
+    char token[50];
+
+
+    /*** Searches for target file entry on source directory ***/
+
+    target_dir_entry = follow_path (fat, bpb, current_dir_entry, current_dir_cluster, name, temp_ram_area, token, &target_cluster);
+    
+    // Here 'token' must be the target file name
+    fat_standard(upper_case(token), fat_std);
+    
+    // Searches the file in directory
+    file_entry = find_file(target_dir_entry, bpb->root_entry_count, fat_std);
+    if (file_entry == 0) {
+        printf_("File '%s' not found bastard!!!\n", token);
+        return;
+    }
+    
+    if (file_entry->attributes != ARCHIVE) {
+        printf_("'%s' is not a file bastard!!!\n", token);
+        return;    
+    }
+    
+    printf_("delete '%s'\n",file_entry->name);
+    // To remove a file, set 0xE5 to the DIR_Name[0] to free the entry.
+    //  https://elm-chan.org/docs/fat_e.html#dir_struct
+    file_entry->name[0] = 0xE5;
+    printf_("delete '%s'\n",file_entry->name);
+    printf_("file_entry->current_cluster_low %X\n",file_entry->current_cluster_low);
+    printf_("target_cluster: %X\n",target_cluster);
+    printf_("target_dir_entry: %X\n",target_dir_entry);
+    
+    // Update current directory on disk
+    update_disk_dir ((uint8_t *)target_dir_entry, bpb, target_cluster, temp_ram_area);
+     
+    // Update current directory on RAM
+    if (target_cluster == current_dir_cluster)
+        memcpy_((uint8_t *)current_dir_entry, (uint8_t *)target_dir_entry, bpb->root_entry_count * 32); 
+        
+    free_cluster = file_entry->current_cluster_low;
+    do {
+        next_cluster = fat16[free_cluster];
+        printf_("free_cluster: %X\n",free_cluster);
+        fat16[free_cluster] = 0;
+        free_cluster = next_cluster; 
+    } while(next_cluster < END_OF_CHAIN);
+
+    
+    update_disk_fat (fat, bpb, temp_ram_area);   
 }
 
 

@@ -39,6 +39,7 @@
 #define MEM_WRITE   16
 #define COPY        17 
 #define MKDIR       18
+#define RM          19
         
 
 // https://wiki.osdev.org/Detecting_Memory_(x86)#BIOS_Function:_INT_0x15,_EAX_=_0xE820
@@ -228,9 +229,10 @@ uint8_t get_command(char *cmd) {
     if (!strcmp_(cmd, "time"))      return GET_TIME;
     if (!strcmp_(cmd, "stime"))     return SET_TIME;
     if (!strcmp_(cmd, "mwrite"))    return MEM_WRITE;
-    if (!strcmp_(cmd, "cp") || !strcmp_(cmd, "copy"))    return COPY;
-    if (!strcmp_(cmd, "md") || !strcmp_(cmd, "mkdir"))    return MKDIR;
-    
+    if (!strcmp_(cmd, "cp") || !strcmp_(cmd, "copy"))   return COPY;
+    if (!strcmp_(cmd, "md") || !strcmp_(cmd, "mkdir"))  return MKDIR;
+    if (!strcmp_(cmd, "rm") || !strcmp_(cmd, "del"))    return RM;
+        
     return UNKNOWN;    
 }
 
@@ -801,6 +803,17 @@ void main() {
                 }
                 
                 make_dir (fat, bpb, current_dir_entry, current_dir_cluster, token, TEMP_LOAD_ADDR);
+            break;
+            
+            case RM:
+                n = get_token(cmd_line, n, token);
+                
+                if (strlen_(token) == 0) {
+                    puts_("Sintax: rm <name>\n");
+                    break;
+                }
+                
+                remove_file (fat, bpb, current_dir_entry, current_dir_cluster, token, TEMP_LOAD_ADDR);
             break;
             
             // Then test for executables
