@@ -525,6 +525,54 @@ void remove_file (uint8_t *fat, struct BPB *bpb, struct Root_Entry *current_dir_
 
 
 
+void rename_file (uint8_t *fat, struct BPB *bpb, struct Root_Entry *current_dir_entry, uint16_t current_dir_cluster, char *name, char *new_name, uint32_t temp_ram_area) {
+    
+    struct Root_Entry *file_entry, *target_dir_entry;
+    uint16_t target_cluster;
+    char fat_std[50];
+    char token[50];
+
+    
+    if (strlen_(new_name) > FILE_NAME_SIZE) {
+        printf_("File name must have at most %d characters bastard!!!\n", FILE_NAME_SIZE);
+        return;
+    }
+    
+    /*** Searches for target file entry on source directory ***/
+
+    target_dir_entry = follow_path (fat, bpb, current_dir_entry, current_dir_cluster, name, temp_ram_area, token, &target_cluster);
+    
+    // Here 'token' must be the target file name
+    fat_standard(upper_case(token), fat_std);
+    
+    // Searches the file in directory
+    file_entry = find_file(target_dir_entry, bpb->root_entry_count, fat_std);
+    if (file_entry == 0) {
+        printf_("File/directory '%s' not found bastard!!!\n", token);
+        return;
+    }
+    
+    if (file_entry->attributes != ARCHIVE && file_entry->attributes != DIRECTORY) {
+        printf_("'%s' is not a file nor a directory bastard!!!\n", token);
+        return;    
+    }
+    
+    printf_("rename '%s'\n",file_entry->name);
+    fat_standard(upper_case(new_name), file_entry->name);
+    printf_("file_entry->current_cluster_low %X\n",file_entry->current_cluster_low);
+    printf_("target_cluster: %X\n",target_cluster);
+    printf_("target_dir_entry: %X\n",target_dir_entry);
+    
+    // Update current directory on disk
+    update_disk_dir ((uint8_t *)target_dir_entry, bpb, target_cluster, temp_ram_area);
+     
+    // Update current directory on RAM
+    if (target_cluster == current_dir_cluster)
+        memcpy_((uint8_t *)current_dir_entry, (uint8_t *)target_dir_entry, bpb->root_entry_count * 32);     
+}
+
+
+
 
 
 

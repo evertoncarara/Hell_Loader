@@ -40,6 +40,7 @@
 #define COPY        17 
 #define MKDIR       18
 #define RM          19
+#define MV          20
         
 
 // https://wiki.osdev.org/Detecting_Memory_(x86)#BIOS_Function:_INT_0x15,_EAX_=_0xE820
@@ -232,6 +233,7 @@ uint8_t get_command(char *cmd) {
     if (!strcmp_(cmd, "cp") || !strcmp_(cmd, "copy"))   return COPY;
     if (!strcmp_(cmd, "md") || !strcmp_(cmd, "mkdir"))  return MKDIR;
     if (!strcmp_(cmd, "rm") || !strcmp_(cmd, "del"))    return RM;
+    if (!strcmp_(cmd, "mv") || !strcmp_(cmd, "ren"))    return MV;
         
     return UNKNOWN;    
 }
@@ -541,7 +543,7 @@ void main() {
     char current_dir[20];
     current_dir[0] = '\0';
     
-    // Copy files
+    // Copy/move files
     char src[50], dst[50];
     
     // Initialize sub-directory names stack
@@ -553,40 +555,7 @@ void main() {
     strcpy_(current_dir, "root");   
     prompt(current_dir);
     current_dir_cluster = 0;  
-    
-    
-    
-/*** TEST OF COPY ****/
-    /*
-    strcpy_(src, "io.sys");
-    strcpy_(dst,"flash2/io1.sys");
-    printf_("cp %s %s\n", src, dst);
-    copy_file(fat, bpb, current_dir_entry, current_dir_cluster, src, dst, TEMP_LOAD_ADDR);
-    
-    strcpy_(src, "./io.sys");
-    strcpy_(dst,"./flash2/io2.sys");
-    printf_("cp %s %s\n", src, dst);
-    copy_file(fat, bpb, current_dir_entry, current_dir_cluster, src, dst, TEMP_LOAD_ADDR);
-    
-    
-    strcpy_(src, "/flash2/run.bat");
-    strcpy_(dst,"./flash2/fb/run1.bat");
-    printf_("cp %s %s\n", src, dst);
-    copy_file(fat, bpb, current_dir_entry, current_dir_cluster, src, dst, TEMP_LOAD_ADDR);
-    
-    strcpy_(src, "flash2/fb/fb.cfg");
-    strcpy_(dst,"flash2/fb/cfg.bat");
-    printf_("cp %s %s\n", src, dst);
-    copy_file(fat, bpb, current_dir_entry, current_dir_cluster, src, dst, TEMP_LOAD_ADDR);
-    
-    strcpy_(src, "config.sys");
-    strcpy_(dst,"flash2/conf.sys");
-    printf_("cp %s %s\n", src, dst);
-    copy_file(fat, bpb, current_dir_entry, current_dir_cluster, src, dst, TEMP_LOAD_ADDR);*/
 
-/******************************************************/
-    
-    
     
     // Command line interface
     while(1) {
@@ -814,6 +783,24 @@ void main() {
                 }
                 
                 remove_file (fat, bpb, current_dir_entry, current_dir_cluster, token, TEMP_LOAD_ADDR);
+            break;
+            
+            case MV:               
+                n = get_token(cmd_line, n, src);
+                
+                if (strlen_(src) == 0) {
+                    puts_("Sintax: mv <name> <new name>\n");
+                    break;
+                }
+                
+                n = get_token(cmd_line, n, dst);
+                
+                if (strlen_(dst) == 0) {
+                    puts_("Sintax: mv <name> <new name>\n");
+                    break;
+                }                
+
+                rename_file(fat, bpb, current_dir_entry, current_dir_cluster, src, dst, TEMP_LOAD_ADDR);
             break;
             
             // Then test for executables
