@@ -56,6 +56,101 @@ struct Root_Entry {
 #define ARCHIVE         0x20
 #define LONG_FILE_NAME  0x0F
 
+// Gemini generated function
+uint8_t is_valid_fat16_char(unsigned char c) {
+    // Reject control characters (0x00-0x1F) and DEL (0x7F)
+    if (c <= 0x1F || c == 0x7F) {
+        return 0;
+    }
+
+    // Reject characters explicitly forbidden by the FAT specification
+    const char *invalid_chars = "\"*/:<>?\\|+,;=[] ";
+    for (uint8_t i = 0; invalid_chars[i] != '\0'; i++)
+        if (c == invalid_chars[i]) {
+            return 0;        
+        }
+
+    return 1;
+}
+
+// Gemini generated function
+uint8_t valid_fat16_filename(char *filename) {
+    if (filename == NULL || filename[0] == '\0') {
+        return 0;
+    }
+
+    int name_len = 0;
+    int ext_len = 0;
+    uint8_t has_dot = 0;
+
+
+    for (size_t i = 0; filename[i] != '\0'; i++) {
+
+        if (filename[i] == '.') {
+            // Only one dot is allowed, and the base name cannot be empty
+            if (has_dot || name_len == 0) {
+                return 0;
+            }
+            has_dot = 1;
+            continue;
+        }
+
+        if (!is_valid_fat16_char(filename[i])) {
+            return 0;
+        }
+
+        if (!has_dot) {
+            name_len++;
+            if (name_len > 8) {
+                return 0; // Base name exceeds 8 characters
+            }
+        } else {
+            ext_len++;
+            if (ext_len > 3) {
+                return 0; // Extension exceeds 3 characters
+            }
+        }
+    }
+
+    // If a dot was present, there must be at least 1 extension character
+    if (!has_dot || (has_dot && ext_len == 0)) {
+        return 0;
+    }
+
+    return 1;
+}
+
+// Gemini generated function
+uint8_t valid_fat16_dirname(char *dir_name) {
+    
+    // 1. Check for NULL or empty string
+    if (dir_name == NULL || dir_name[0] == '\0') {
+        return 0;
+    }
+
+    uint8_t len = strlen_(dir_name);
+
+    // 2. Standard FAT16 base name cannot exceed 8 characters
+    if (len > 8) {
+        return 0;
+    }
+
+    // 3. FAT16 filenames/directories cannot begin with a space (0x20)
+    if (dir_name[0] == ' ') {
+        return 0;
+    }
+
+    // 4. Check each character against FAT16 invalid character rules
+    // Forbidden ASCII symbols: " * / : < > ? \ | + , . ; = [ ]  
+    for (uint8_t i = 0; i < len; i++) 
+        if (!is_valid_fat16_char(dir_name[i]) || dir_name[i] == '.') 
+            return 0;
+
+    return 1;
+}
+
+
+
 
 // Put in FAT standard 8.3 format
 // The first 8 characters are the name and the last 3 are the extension
