@@ -573,7 +573,7 @@ void main() {
                 get_token(cmd_line, n, dst);   
                 
                 if (strlen_(dst) != 0) 
-                    dir_entry = follow_path (fat, bpb, current_dir_entry, current_dir_cluster, dst, TEMP_LOAD_ADDR, NULL, NULL);
+                    dir_entry = follow_path (fat, bpb, current_dir_entry, current_dir_cluster, dst, TEMP_LOAD_ADDR, NULL, NULL, NULL);
  
                 list_files(dir_entry, bpb->root_entry_count);
                 
